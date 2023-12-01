@@ -17,16 +17,20 @@
 pip install camvidlog
 ```
 
+This requires several large external data files:
+
+https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x-oiv7.pt
+https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x-cls.pt
+
 ## Execution
 
-
-start the web application
+Start the web application:
 
 ```console
 hatch run shiny run -d src/camvidlog
 ```
 
-Load a single video
+Load a single video:
 
 ```console
 hatch run python src/camvidlog/run/load.py FILENAME
