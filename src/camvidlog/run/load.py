@@ -16,8 +16,11 @@ if __name__ == "__main__":
     for filename in args.filename:
         video_path = Path(filename).resolve()
 
-        results = cv_service.analyse_video(video_path)
-        print(results)
+        tracks = cv_service.find_things(video_path)
+        results = cv_service.know_tracks(tracks)
+        print(filename)
+        for _,p in results.items():
+            print(p)
 
     # db_service = DbService(config.database_url)
     # db_service.add_video(filename=args.filename)

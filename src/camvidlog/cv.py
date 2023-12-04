@@ -1,6 +1,5 @@
 from typing import Generator
-
-from PIL import Image
+import matplotlib.pyplot as plt
 from pydantic import BaseModel
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
@@ -14,45 +13,70 @@ class VideoResult(BaseModel):
     probs: tuple[tuple[int, float], ...]
 
 
-def plot_result(result):
-    im_array = result.plot()  # plot a BGR numpy array of predictions
-    im = Image.fromarray(im_array[..., ::-1])  # RGB PIL image
-    im.show()  # show image
+"""
+
+two step process
+
+1. find - each tracked object is sequence of boxes from frames
+
+2. know - extract boxes from frame and classify, then combine classification over track
+
+"""
 
 
 class ComputerVisionService:
-    model: YOLO
+    model_track: YOLO
 
     def __init__(self):
-        self.model = YOLO(get_data("yolov8x-oiv7.pt"))
+        self.model_track = YOLO(get_data("yolov8x-oiv7.pt"))
+        # image net does not have good wildlife classes
+        # openimage has some at least
+        self.model_cls = YOLO(get_data("yolov8x-cls.pt"))
 
-    def analyse_video(self, videopath, framestep=1) -> tuple[VideoResult, ...]:
+    def find_things(self, videopath, *, framestep=10, verbose=False):
         tracks = {}
+
         # iou = "intersection over union" for non-maximum supression (NMS)
         # tl;dr remove overlapping hits, lower is stricter
-        results: Generator[Results, None, None] = self.model.track(
-            videopath, stream=True, iou=0.25, agnostic_nms=True, vid_stride=framestep
+        results: Generator[Results, None, None] = self.model_track.track(
+            videopath, stream=True, iou=0.25, agnostic_nms=True, vid_stride=framestep, verbose=verbose
         )
         for i, result in enumerate(results):
             if not result.boxes.id:
                 continue
 
-            result.boxes.cpu()
-
-            for box in result.boxes:
+            for box in result.cpu().boxes:
                 box_id = box.id.item()
-                box_conf = box.conf.item()
-                box_cls = box.cls.item()
-                print(f"{box_id} {box_cls} {box_conf}")
 
-                if box_id in tracks:
-                    previous_result = tracks[box_id]
-                    tracks[box_id] = VideoResult(
-                        timestart=previous_result.timestart,
-                        timeend=i,
-                        probs=(*previous_result.probs, (box_cls, box_conf)),
-                    )
+                # extract that region from the original image
+                # TODO enlarge region 10% on each side first
+                x1 = int(box.xyxy[0, 0])
+                y1 = int(box.xyxy[0, 1])
+                x2 = int(box.xyxy[0, 2])
+                y2 = int(box.xyxy[0, 3])
+                sub_img = result.orig_img[y1:y2, x1:x2]
+
+                previous = tracks.get(box_id, ())
+                tracks[box_id] = (*previous, (i, box.xyxy, sub_img))
+
+        return tracks
+
+    def know_tracks(self, tracks, *, verbose=False):
+        knowns = {}
+        for id_, track in tracks.items():
+            probs = None
+            names = None
+            for i, xyxy, img in track:
+                results = self.model_cls(img, verbose=verbose)
+                if probs is not None:
+                    probs += results[0].probs.cpu().numpy().data
                 else:
-                    tracks[box_id] = VideoResult(timestart=i, timeend=i, probs=((box_cls, box_conf),))
+                    probs = results[0].probs.cpu().numpy().data
 
-        return tuple(tracks.values())
+                if not names:
+                    names = results[0].names
+
+            # now get the most prob and the name of it
+            probs_sorted = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)
+            knowns[id_] = tuple((p/len(track), names[i]) for i, p in probs_sorted[:5])
+        return knowns
