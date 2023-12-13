@@ -1,17 +1,13 @@
+import logging
 from typing import Generator
-import matplotlib.pyplot as plt
-from pydantic import BaseModel
+
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
 from camvidlog import get_data
+from camvidlog.cv.models import ThingResult, ThingResultFrame
 
-
-class VideoResult(BaseModel):
-    timestart: int
-    timeend: int
-    probs: tuple[tuple[int, float], ...]
-
+logger = logging.getLogger(__name__)
 
 """
 
@@ -33,7 +29,7 @@ class ComputerVisionService:
         # openimage has some at least
         self.model_cls = YOLO(get_data("yolov8x-cls.pt"))
 
-    def find_things(self, videopath, *, framestep=10, verbose=False):
+    def find_things(self, videopath, *, framestep=10, verbose=False) -> tuple[ThingResult, ...]:
         tracks = {}
 
         # iou = "intersection over union" for non-maximum supression (NMS)
@@ -42,6 +38,8 @@ class ComputerVisionService:
             videopath, stream=True, iou=0.25, agnostic_nms=True, vid_stride=framestep, verbose=verbose
         )
         for i, result in enumerate(results):
+            logger.info(f"Processing frame {i*framestep}")
+
             if not result.boxes.id:
                 continue
 
@@ -56,10 +54,15 @@ class ComputerVisionService:
                 y2 = int(box.xyxy[0, 3])
                 sub_img = result.orig_img[y1:y2, x1:x2]
 
-                previous = tracks.get(box_id, ())
-                tracks[box_id] = (*previous, (i, box.xyxy, sub_img))
+                if not (thingresult := tracks.get(box_id)):
+                    thingresult = ThingResult(frame_first=i, frame_last=i, frames=[])
 
-        return tracks
+                thingresult.frame_last = i
+                thingresult.frames.append(ThingResultFrame(x1=x1, x2=x2, y1=y1, y2=y2, sub_img=sub_img))
+
+                tracks[box_id] = thingresult
+
+        return tuple(tracks.values())
 
     def know_tracks(self, tracks, *, verbose=False):
         knowns = {}
@@ -78,5 +81,5 @@ class ComputerVisionService:
 
             # now get the most prob and the name of it
             probs_sorted = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)
-            knowns[id_] = tuple((p/len(track), names[i]) for i, p in probs_sorted[:5])
+            knowns[id_] = tuple((p / len(track), names[i]) for i, p in probs_sorted[:5])
         return knowns

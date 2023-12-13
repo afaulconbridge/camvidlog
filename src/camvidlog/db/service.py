@@ -1,7 +1,9 @@
-from sqlalchemy import Engine, create_engine
-from sqlmodel import Session, SQLModel
+from typing import Iterable
 
-from camvidlog.db.models import Video
+from sqlalchemy import Engine, create_engine
+from sqlmodel import Session, SQLModel, select
+
+from camvidlog.db.models import Track, Video
 
 
 class DbService:
@@ -20,3 +22,20 @@ class DbService:
         with Session(self._engine) as session:
             session.add(video)
             session.commit()
+
+    def add_track(self, filename: str, frame_first: int, frame_last: int) -> None:
+        with Session(self._engine) as session:
+            video = session.exec(select(Video).where(Video.filename == filename)).one()
+            track = Track(video_id=video.id_, frame_first=frame_first, frame_last=frame_last)
+            session.add(track)
+            session.commit()
+
+    def get_videos(self) -> Iterable[Video]:
+        with Session(self._engine) as session:
+            results = session.exec(select(Video))
+            return results.fetchall()
+
+    def get_tracks_with_videos(self) -> Iterable[Video]:
+        with Session(self._engine) as session:
+            results = session.exec(select(Video, Track).join_from(Video, Track).order_by(Video.id_, Track.id_))
+            return results.fetchall()

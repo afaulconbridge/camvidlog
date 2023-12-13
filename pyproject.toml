@@ -26,13 +26,14 @@ classifiers = [
 ]
 dependencies = ["shiny", "sqlmodel", "ultralytics", "lapx>=0.5.2"]
 
+[dirs.env]
+virtual = ".hatch"
+
 [project.urls]
 Documentation = "https://github.com/unknown/camvidlog#readme"
 Issues = "https://github.com/unknown/camvidlog/issues"
 Source = "https://github.com/unknown/camvidlog"
 
-[dirs.env]
-virtual = ".hatch"
 
 [tool.hatch.version]
 path = "src/camvidlog/__about__.py"
