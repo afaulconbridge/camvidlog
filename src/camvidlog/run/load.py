@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from numpy import ndarray
-from PIL import Image
+from PIL import Image, ImageOps
 
 from camvidlog.config import ConfigService
 from camvidlog.cv.service import ComputerVisionService
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 def make_thumbnail(source: ndarray, size=(120, 120)) -> bytes:
     image = Image.fromarray(source)
     image.thumbnail(size)
+    image = ImageOps.pad(image, size)
     with BytesIO() as tmpfile:
         image.save(tmpfile, format="jpeg")
         return tmpfile.getvalue()
