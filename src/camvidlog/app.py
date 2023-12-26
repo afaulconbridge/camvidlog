@@ -1,4 +1,5 @@
 import base64
+from pathlib import Path
 from typing import Any
 
 import shiny
@@ -26,7 +27,10 @@ def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
         # frame from-to
         results = []
         for video, track in records:
-            result_parts = [shiny.ui.h5(video.filename)]
+            result_parts = [
+                shiny.ui.h5(video.filename),
+                shiny.ui.tags.video(src=video.filename, width=360, controls=True, muted=True),
+            ]
             if track:
                 result_parts.extend(
                     (
@@ -53,5 +57,7 @@ def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
 
 
 # Combine into a shiny app.
-# Note that the variable must be "app".
-app = shiny.App(app_ui, server)
+# hardcode the path to the datafiles for now
+www_dir = Path(__file__).parent.parent.parent
+# NB: variable must be "app".
+app = shiny.App(app_ui, server, static_assets=www_dir)
