@@ -1,6 +1,6 @@
+import base64
 from typing import Any
 
-import pandas as pd
 import shiny
 
 from camvidlog.config import ConfigService
@@ -8,9 +8,8 @@ from camvidlog.db.service import DbService
 
 # Part 1: ui ----
 app_ui = shiny.ui.page_fluid(
-    shiny.ui.panel_title("CamVidLog"),
-    shiny.ui.output_text("result"),
-    shiny.ui.output_table("videos"),
+    shiny.ui.panel_title("CamVidLog", "CamVidLog"),
+    shiny.ui.output_ui("videos"),
 )
 
 config = ConfigService()
@@ -20,25 +19,37 @@ db_service = DbService(config.database_url)
 # Part 2: server ----
 def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
     @output
-    @shiny.render.text
-    def result():
-        return "hello world"
-
-    @output
-    @shiny.render.table
+    @shiny.render.ui
     def videos():
         records = db_service.get_tracks_with_videos()
-        dicts = []
-        for r in records:
-            video, track = r
-            d = {}
-            for k, v in dict(video.model_dump()).items():
-                d[f"v.{k}"] = v
-            for k, v in dict(track.model_dump()).items():
-                d[f"t.{k}"] = v
-            dicts.append(d)
-        df = pd.DataFrame.from_records(dicts, exclude=("v.id_", "t.video_id", "t.id_"))
-        return df
+        # filename
+        # frame from-to
+        results = []
+        for video, track in records:
+            result_parts = [shiny.ui.h5(video.filename)]
+            if track:
+                result_parts.extend(
+                    (
+                        shiny.ui.div(
+                            f"{track.frame_first:04d}-{track.frame_last:04d} ({track.frame_last-track.frame_first+1})"
+                        ),
+                        shiny.ui.div(
+                            shiny.ui.img(
+                                src=f"data:image/jpeg;base64, {base64.standard_b64encode(track.thumb_first).decode()}"
+                            ),
+                            shiny.ui.img(
+                                src=f"data:image/jpeg;base64, {base64.standard_b64encode(track.thumb_mid).decode()}"
+                            ),
+                            shiny.ui.img(
+                                src=f"data:image/jpeg;base64, {base64.standard_b64encode(track.thumb_last).decode()}"
+                            ),
+                        ),
+                    )
+                )
+
+            results.append(shiny.ui.div(*result_parts))
+
+        return shiny.ui.page_fluid(*results)
 
 
 # Combine into a shiny app.

@@ -23,10 +23,19 @@ class DbService:
             session.add(video)
             session.commit()
 
-    def add_track(self, filename: str, frame_first: int, frame_last: int) -> None:
+    def add_track(
+        self, filename: str, frame_first: int, frame_last: int, thumb_first: bytes, thumb_mid: bytes, thumb_last: bytes
+    ) -> None:
         with Session(self._engine) as session:
             video = session.exec(select(Video).where(Video.filename == filename)).one()
-            track = Track(video_id=video.id_, frame_first=frame_first, frame_last=frame_last)
+            track = Track(
+                video_id=video.id_,
+                frame_first=frame_first,
+                frame_last=frame_last,
+                thumb_first=thumb_first,
+                thumb_mid=thumb_mid,
+                thumb_last=thumb_last,
+            )
             session.add(track)
             session.commit()
 
@@ -35,7 +44,9 @@ class DbService:
             results = session.exec(select(Video))
             return results.fetchall()
 
-    def get_tracks_with_videos(self) -> Iterable[Video]:
+    def get_tracks_with_videos(self) -> Iterable[tuple[Video, Track]]:
         with Session(self._engine) as session:
-            results = session.exec(select(Video, Track).join_from(Video, Track).order_by(Video.id_, Track.id_))
+            results = session.exec(
+                select(Video, Track).join_from(Video, Track, isouter=True).order_by(Video.id_, Track.id_)
+            )
             return results.fetchall()

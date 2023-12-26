@@ -13,3 +13,6 @@ class Track(SQLModel, table=True):
     video_id: int = Field(default=None, foreign_key="video.id_")
     frame_first: int
     frame_last: int
+    thumb_first: bytes
+    thumb_mid: bytes
+    thumb_last: bytes
