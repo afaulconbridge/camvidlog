@@ -19,8 +19,10 @@ pip install camvidlog
 
 This requires several large (>100MB each) external data files:
 
+```console
 wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x-oiv7.pt -O src/camvidlog/data/yolov8x-oiv7.pt
 wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x-cls.pt -O src/camvidlog/data/yolov8x-cls.pt
+```
 
 ## Execution
 
