@@ -40,7 +40,10 @@ class ComputerVisionService:
         for i, result in enumerate(results):
             logger.info(f"Processing frame {i*framestep}")
 
-            if not result.boxes.id:
+            # has to be explicit comparison to None
+            # tensor may be falsy if its an id of 0
+            # tensor throws error if more than one value
+            if result.boxes.id is None:
                 continue
 
             for box in result.cpu().boxes:
