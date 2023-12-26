@@ -9,6 +9,7 @@
 
 - [Installation](#installation)
 - [Execution](#execution)
+- [Development](#development)
 - [License](#license)
 
 ## Installation
@@ -36,6 +37,14 @@ Load a single video:
 
 ```console
 hatch run python src/camvidlog/run/load.py FILENAME
+```
+
+## Development
+
+Run linting checks etc with:
+
+```console
+hatch -e lint run all
 ```
 
 
