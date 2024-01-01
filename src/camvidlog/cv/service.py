@@ -50,12 +50,14 @@ class ComputerVisionService:
                 box_id = box.id.item()
 
                 # extract that region from the original image
-                # TODO enlarge region 10% on each side first
                 x1 = int(box.xyxy[0, 0])
                 y1 = int(box.xyxy[0, 1])
                 x2 = int(box.xyxy[0, 2])
                 y2 = int(box.xyxy[0, 3])
-                sub_img = result.orig_img[y1:y2, x1:x2]
+                # enlarge region 10% on each side
+                w = (x2 - x1) // 10
+                h = (y2 - y1) // 10
+                sub_img = result.orig_img[y1 - h : y2 + h, x1 - w : x2 + w]
 
                 if not (thingresult := tracks.get(box_id)):
                     thingresult = ThingResult(frame_first=i, frame_last=i, frames=[])
