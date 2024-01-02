@@ -55,13 +55,13 @@ def make_thumbnail(image: ndarray, size=(120, 120)) -> bytes:
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # global histogram equalization
-    image = cv2.equalizeHist(image)
+    # image = cv2.equalizeHist(image)
 
     # local histogram equalization
-    # clip = 1
-    # tile = 4
-    # clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(tile, tile))
-    # image = clahe.apply(image)
+    clip = 1
+    tile = 4
+    clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(tile, tile))
+    image = clahe.apply(image)
 
     # resize and border
     # do this _after_ histogram normalization so that any border is not included in that step
@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
         video_path = Path(filename).resolve()
 
-        tracks = cv_service.find_things(video_path, framestep=3)
+        tracks = cv_service.find_things(video_path, framestep=config.framestep)
         logger.info(f"Found {len(tracks)} tracks")
 
         db_service.add_video(filename=filename)
