@@ -19,3 +19,5 @@ class ThingResult(BaseModel):
     frame_first: int
     frame_last: int
     frames: List[ThingResultFrame]
+    result: str
+    result_score: float

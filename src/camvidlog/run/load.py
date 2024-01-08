@@ -121,4 +121,6 @@ if __name__ == "__main__":
                 thumb_first=thumb_first,
                 thumb_mid=thumb_mid,
                 thumb_last=thumb_last,
+                result=track.result,
+                result_score=track.result_score,
             )

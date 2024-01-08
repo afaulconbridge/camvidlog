@@ -183,9 +183,10 @@ class ComputerVisionService:
                 x1, y1, x2, y2 = (int(i) for i in box.tolist())
                 w = x2 - x1
                 h = y2 - y1
-                s = score.item()  # unwrap the ndarray
+                result_score = score.item()  # unwrap the ndarray
+                result = text[label]
                 logger.debug(
-                    f"frame {frame_i} hit {j} {text[label]} with confidence {s:.2f} at location [{x1},{y1},{x2},{y2}] ({w}x{h})"
+                    f"frame {frame_i} hit {j} {result} with confidence {result_score:.2f} at location [{x1},{y1},{x2},{y2}] ({w}x{h})"
                 )
 
                 # TODO check if it overlaps with the last frame of a previous thing
@@ -213,14 +214,20 @@ class ComputerVisionService:
                     if ratio > ConfigService.cv_threshold_tracking:
                         # overlap!
                         result_thing = thing
-                        logger.info("Found existing thing")
+                        logger.debug("Found existing thing at [{tx1},{ty1},{tx2},{ty2}] ({ratio:.2f}%)")
                         break
 
                 if not result_thing:
                     # no existing thing found, make a new one
-                    result_thing = ThingResult(frame_first=frame_i, frame_last=frame_i, frames=[])
+                    result_thing = ThingResult(
+                        frame_first=frame_i,
+                        frame_last=frame_i,
+                        frames=[],
+                        result=text[label],
+                        result_score=result_score,
+                    )
                     things.append(result_thing)
-                    logger.info("Created new thing")
+                    logger.debug("Created new thing")
 
                 # extract that region from the original image
                 # enlarge region 10% on each side
@@ -231,6 +238,11 @@ class ComputerVisionService:
                 # extend thing with this new hit
                 # TODO fill in any missing frames images
                 result_thing.frame_last = frame_i
+                num_existing_frames = len(result_thing.frames)
+                # when adding a 3rd frame, we want 1/3rd of the new score and 2/3rds of the old score
+                result_thing.result_score = (
+                    (num_existing_frames / (num_existing_frames + 1)) * result_thing.result_score
+                ) + (result_score / (num_existing_frames + 1))
                 result_thing.frames.append(ThingResultFrame(x1=x1, x2=x2, y1=y1, y2=y2, sub_img=sub_img))
 
         # filter to only things that appeared for a minimum time

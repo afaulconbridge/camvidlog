@@ -24,7 +24,15 @@ class DbService:
             session.commit()
 
     def add_track(
-        self, filename: str, frame_first: int, frame_last: int, thumb_first: bytes, thumb_mid: bytes, thumb_last: bytes
+        self,
+        filename: str,
+        frame_first: int,
+        frame_last: int,
+        thumb_first: bytes,
+        thumb_mid: bytes,
+        thumb_last: bytes,
+        result: str,
+        result_score: float,
     ) -> None:
         with Session(self._engine) as session:
             video = session.exec(select(Video).where(Video.filename == filename)).one()
@@ -35,6 +43,8 @@ class DbService:
                 thumb_first=thumb_first,
                 thumb_mid=thumb_mid,
                 thumb_last=thumb_last,
+                result=result,
+                result_score=result_score,
             )
             session.add(track)
             session.commit()

@@ -53,7 +53,7 @@ def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
                     (
                         shiny.ui.div(
                             shiny.ui.p(
-                                f"{track.frame_first:04d}-{track.frame_last:04d} ({track.frame_last-track.frame_first+1})"
+                                f'{track.frame_first:04d}-{track.frame_last:04d} ({track.frame_last-track.frame_first+1}) "{track.result}" ({track.result_score:.3f})'
                             )
                         ),
                         shiny.ui.div(

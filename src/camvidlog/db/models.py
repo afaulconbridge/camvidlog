@@ -16,3 +16,5 @@ class Track(SQLModel, table=True):
     thumb_first: bytes
     thumb_mid: bytes
     thumb_last: bytes
+    result: str
+    result_score: float
