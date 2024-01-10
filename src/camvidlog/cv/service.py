@@ -211,7 +211,7 @@ class ComputerVisionService:
                     if ratio > ConfigService.cv_threshold_tracking:
                         # overlap!
                         result_thing = thing
-                        logger.debug("Found existing thing at [{tx1},{ty1},{tx2},{ty2}] ({ratio:.2f}%)")
+                        logger.debug(f"Found existing thing at [{tx1},{ty1},{tx2},{ty2}] ({ratio:.2f}%)")
                         break
 
                 if not result_thing:

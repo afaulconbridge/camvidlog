@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from numpy import ndarray
 
-from camvidlog.config import ConfigService
+from camvidlog.config import ConfigService, setup_logging
 from camvidlog.cv.service import ComputerVisionService
 from camvidlog.db.service import DbService
 
@@ -130,11 +130,13 @@ def handle_filename(filename: str, config: ConfigService) -> None:
 
 if __name__ == "__main__":
     # this should only happen once per python process
-    logging.basicConfig(level=logging.INFO)
+    # logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(prog="CamVidLogLoader", description="Loads files into CamVidLog")
     parser.add_argument("filename", nargs="+")
     args = parser.parse_args()
+
+    setup_logging()
 
     logger.info(f"Found {len(args.filename)} files")
 

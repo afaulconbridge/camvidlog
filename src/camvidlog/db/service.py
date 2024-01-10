@@ -13,7 +13,8 @@ class DbService:
     def __init__(self, db_url: str):
         self.db_url = db_url
 
-        self._engine = create_engine(self.db_url, echo=True)
+        # turn off forced logging via echo
+        self._engine = create_engine(self.db_url, echo=False)
 
         SQLModel.metadata.create_all(self._engine)
 
