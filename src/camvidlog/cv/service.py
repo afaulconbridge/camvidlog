@@ -121,21 +121,19 @@ class ComputerVisionService:
             frame_i = step_i * framestep
 
             # TODO use a better list of potential matches
-            texts = [
-                [
-                    "deer",
-                    "fox",
-                    "hedgehog",
-                    "otter",
-                    "human",
-                    "cat",
-                    "dog",
-                    "mouse",
-                    "rat",
-                    "ferret",
-                    "badger",
-                    "bird",
-                ]
+            potential_matches = [
+                "deer",
+                "fox",
+                "hedgehog",
+                "otter",
+                "human",
+                "cat",
+                "dog",
+                "mouse",
+                "rat",
+                "ferret",
+                "badger",
+                "bird",
             ]
             # 1 # texts = [[f"greyscale {text}" for text in texts[0]]]
             # 1 # overlap_threshold = 0.8  # go high to avoid false positives
@@ -147,7 +145,7 @@ class ComputerVisionService:
             # 4 # confidence_threshold = 0.3  # go low and recheck later after tracking
             # 4 # [results good, 0041-0901 (861) no mismatch]
             # 5 # (without contrast correction)
-            texts = [[f"black and white photo of {text}" for text in texts[0]]]
+            texts = [[f"black and white photo of {text}" for text in potential_matches]]
             inputs = self.processor(text=texts, images=frame, return_tensors="pt")
             inputs.to(self.device)
             outputs = self.model(**inputs)
@@ -160,7 +158,6 @@ class ComputerVisionService:
             )
 
             # Retrieve predictions for the first image for the corresponding text queries
-            text = texts[0]
             # pull everthing back to CPU
             boxes = results[0]["boxes"].cpu().detach().numpy()
             scores = results[0]["scores"].cpu().detach().numpy()
@@ -184,7 +181,7 @@ class ComputerVisionService:
                 w = x2 - x1
                 h = y2 - y1
                 result_score = score.item()  # unwrap the ndarray
-                result = text[label]
+                result = potential_matches[label]
                 logger.debug(
                     f"frame {frame_i} hit {j} {result} with confidence {result_score:.2f} at location [{x1},{y1},{x2},{y2}] ({w}x{h})"
                 )
@@ -223,7 +220,7 @@ class ComputerVisionService:
                         frame_first=frame_i,
                         frame_last=frame_i,
                         frames=[],
-                        result=text[label],
+                        result=potential_matches[label],
                         result_score=result_score,
                     )
                     things.append(result_thing)
@@ -238,12 +235,17 @@ class ComputerVisionService:
                 # extend thing with this new hit
                 # TODO fill in any missing frames images
                 result_thing.frame_last = frame_i
-                num_existing_frames = len(result_thing.frames)
-                # when adding a 3rd frame, we want 1/3rd of the new score and 2/3rds of the old score
-                result_thing.result_score = (
-                    (num_existing_frames / (num_existing_frames + 1)) * result_thing.result_score
-                ) + (result_score / (num_existing_frames + 1))
-                result_thing.frames.append(ThingResultFrame(x1=x1, x2=x2, y1=y1, y2=y2, sub_img=sub_img))
+                result_thing.frames.append(
+                    ThingResultFrame(
+                        x1=x1,
+                        x2=x2,
+                        y1=y1,
+                        y2=y2,
+                        sub_img=sub_img,
+                        result=result,
+                        result_score=result_score,
+                    )
+                )
 
         # filter to only things that appeared for a minimum time
         return [thing for thing in things if len(thing.frames) > (30 / framestep) * ConfigService.cv_time_min_tracking]

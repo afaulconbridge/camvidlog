@@ -13,11 +13,11 @@ class ThingResultFrame(BaseModel):
     y1: int
     y2: int
     sub_img: ndarray
+    result: str
+    result_score: float
 
 
 class ThingResult(BaseModel):
     frame_first: int
     frame_last: int
     frames: List[ThingResultFrame]
-    result: str
-    result_score: float

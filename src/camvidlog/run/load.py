@@ -81,6 +81,53 @@ def make_thumbnail(image: ndarray, size=(120, 120)) -> bytes:
     return byte_encode
 
 
+def handle_filename(filename: str, config: ConfigService) -> None:
+    cv_service = ComputerVisionService()
+    db_service = DbService(config.database_url)
+
+    # TODO move this into a separate VideoService ?
+
+    video_path = Path(filename).resolve()
+
+    tracks = cv_service.find_things(video_path, framestep=config.framestep)
+    logger.info(f"Found {len(tracks)} tracks")
+
+    db_service.add_video(filename=filename)
+
+    for i, track in enumerate(tracks):
+        logger.info(f"{i}) {track.frame_first}=>{track.frame_last}")
+
+        # generate first/mid/last thumbnail images as JPEG files
+        thumb_first = make_thumbnail(track.frames[0].sub_img)
+        thumb_mid = make_thumbnail(track.frames[len(track.frames) // 2].sub_img)
+        thumb_last = make_thumbnail(track.frames[-1].sub_img)
+
+        # calculate overall classification and score
+        results: dict[str, float] = {}
+        for ii, frame in enumerate(track.frames):
+            # scale all previous scores down
+            for result in results:
+                results[result] = (results[result] * ii) / (ii + 1)
+            # add the score from this frame
+            frame_score_scaled = frame.result_score / (ii + 1)
+            results[frame.result] = results.get(frame.result, 0.0) + frame_score_scaled
+        # get the best score
+        result_top, result_top_score = sorted(results.items(), key=lambda x: x[1], reverse=True)[0]
+
+        # TODO more video metadata - date taken, FPS, etc
+
+        db_service.add_track(
+            filename=filename,
+            frame_first=track.frame_first,
+            frame_last=track.frame_last,
+            thumb_first=thumb_first,
+            thumb_mid=thumb_mid,
+            thumb_last=thumb_last,
+            result=result_top,
+            result_score=result_top_score,
+        )
+
+
 if __name__ == "__main__":
     # this should only happen once per python process
     logging.basicConfig(level=logging.INFO)
@@ -89,38 +136,15 @@ if __name__ == "__main__":
     parser.add_argument("filename", nargs="+")
     args = parser.parse_args()
 
-    config = ConfigService()
-    cv_service = ComputerVisionService()
-    db_service = DbService(config.database_url)
-
     logger.info(f"Found {len(args.filename)} files")
+
+    config = ConfigService()
+
+    # https://pytorch.org/docs/stable/torch_cuda_memory.html
+    # torch.cuda.memory._record_memory_history()
+
     for filename in sorted(args.filename):
-        # TODO move this into a separate VideoService ?
+        handle_filename(filename, config)
 
-        video_path = Path(filename).resolve()
-
-        tracks = cv_service.find_things(video_path, framestep=config.framestep)
-        logger.info(f"Found {len(tracks)} tracks")
-
-        db_service.add_video(filename=filename)
-
-        for i, track in enumerate(tracks):
-            logger.info(f"{i}) {track.frame_first}=>{track.frame_last}")
-
-            # generate first/mid/last thumbnail images as JPEG files
-            thumb_first = make_thumbnail(track.frames[0].sub_img)
-            thumb_mid = make_thumbnail(track.frames[len(track.frames) // 2].sub_img)
-            thumb_last = make_thumbnail(track.frames[-1].sub_img)
-
-            # TODO more video metadata - date taken, FPS, etc
-
-            db_service.add_track(
-                filename=filename,
-                frame_first=track.frame_first,
-                frame_last=track.frame_last,
-                thumb_first=thumb_first,
-                thumb_mid=thumb_mid,
-                thumb_last=thumb_last,
-                result=track.result,
-                result_score=track.result_score,
-            )
+    # https://pytorch.org/docs/stable/torch_cuda_memory.html
+    # torch.cuda.memory._dump_snapshot()
