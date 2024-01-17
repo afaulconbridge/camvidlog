@@ -51,8 +51,18 @@ def cv2_resize(image: ndarray, width: int, height: int, inter: int = cv2.INTER_A
 
 
 def make_thumbnail(image: ndarray, size=(120, 120)) -> bytes:
+    if image is None or not image.size:
+        msg = "Invalid image provided"
+        raise RuntimeError(msg)
     # need to be converted to grayscale before contrast manipulation
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if image.shape[2] == 1:
+        # already greyscale no action needed
+        pass
+    elif image.shape[2] == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        msg = "Unexpected image shape"
+        raise RuntimeError(msg)
 
     # global histogram equalization
     # image = cv2.equalizeHist(image)
@@ -92,6 +102,7 @@ def handle_filename(filename: str, config: ConfigService) -> None:
     tracks = cv_service.find_things(video_path, framestep=config.framestep)
     logger.info(f"Found {len(tracks)} tracks")
 
+    # TODO more video metadata - date taken, FPS, etc
     db_service.add_video(filename=filename)
 
     for i, track in enumerate(tracks):
@@ -113,8 +124,6 @@ def handle_filename(filename: str, config: ConfigService) -> None:
             results[frame.result] = results.get(frame.result, 0.0) + frame_score_scaled
         # get the best score
         result_top, result_top_score = sorted(results.items(), key=lambda x: x[1], reverse=True)[0]
-
-        # TODO more video metadata - date taken, FPS, etc
 
         db_service.add_track(
             filename=filename,
@@ -146,7 +155,9 @@ if __name__ == "__main__":
     # torch.cuda.memory._record_memory_history()
 
     for filename in sorted(args.filename):
+        logger.info(f"Starting to process {filename}")
         handle_filename(filename, config)
+        logger.info(f"Finished processing {filename}")
 
     # https://pytorch.org/docs/stable/torch_cuda_memory.html
     # torch.cuda.memory._dump_snapshot()
