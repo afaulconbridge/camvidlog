@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Optional
 
 from sqlalchemy import Engine, create_engine
 from sqlmodel import Session, SQLModel, select
@@ -55,9 +55,17 @@ class DbService:
             results = session.exec(select(Video))
             return results.fetchall()
 
-    def get_tracks_with_videos(self) -> Iterable[tuple[Video, Track]]:
+    def get_tracks_with_videos(self, filter_results: Optional[Iterable[str]] = None) -> Iterable[tuple[Video, Track]]:
         with Session(self._engine) as session:
-            results = session.exec(
-                select(Video, Track).join_from(Video, Track, isouter=True).order_by(Video.id_, Track.id_)
-            )
+            query = select(Video, Track).join_from(Video, Track, isouter=True).order_by(Video.id_, Track.id_)
+            if filter_results is not None:  # need to separate empty list or list of None
+                if None in filter_results:
+                    query = query.where(Track.result.in_(filter_results) | (Track.result == None))
+                else:
+                    query = query.where(Track.result.in_(filter_results))
+            results = session.exec(query)
             return results.fetchall()
+
+    def get_track_results(self) -> Iterable[str]:
+        with Session(self._engine) as session:
+            return session.exec(select(Track.result).distinct().order_by(Track.result)).fetchall()
