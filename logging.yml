@@ -7,11 +7,10 @@ handlers:
   console:
     class: logging.StreamHandler
     formatter: standard
-    level: DEBUG
     stream: ext://sys.stdout
 loggers:
   camvidlog:
-    level: DEBUG
+    level: INFO
   sqlalchemy:
     level: WARNING
 root:
