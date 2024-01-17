@@ -39,6 +39,14 @@ Load a single video:
 hatch run python src/camvidlog/run/load.py FILENAME
 ```
 
+Load multiple videos:
+
+```console
+find data -name "*.MP4" -print0 | time xargs -0 hatch run python src/camvidlog/run/load.py
+```
+
+Note - in theory, should be able to do this in a single python process. However, PyTorch seems to run out of GPU memory if its run that way currently.
+
 ## Development
 
 Run linting checks etc with:
