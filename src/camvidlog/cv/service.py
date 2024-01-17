@@ -180,6 +180,8 @@ class ComputerVisionService:
                 x1, y1, x2, y2 = (int(i) for i in box.tolist())
                 w = x2 - x1
                 h = y2 - y1
+                assert w
+                assert h
                 result_score = score.item()  # unwrap the ndarray
                 result = potential_matches[label]
                 logger.debug(
@@ -230,7 +232,8 @@ class ComputerVisionService:
                 # enlarge region 10% on each side
                 ew = w // 10
                 eh = h // 10
-                sub_img = frame[y1 - eh : y2 + eh, x1 - ew : x2 + ew]
+                # TODO cap max value to image size
+                sub_img = frame[max(y1 - eh, 0) : y2 + eh, max(x1 - ew, 0) : x2 + ew]
 
                 # extend thing with this new hit
                 # TODO fill in any missing frames images
