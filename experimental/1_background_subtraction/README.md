@@ -13,3 +13,6 @@ hatch run shiny run experimental/1_background_subtraction/app.py
 
  - Use open & close kernel to denoise and blob. 
 
+ - resolution is king, bigger is better
+
+ - pre-calculating background doesn't work

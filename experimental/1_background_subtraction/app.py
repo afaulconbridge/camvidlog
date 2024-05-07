@@ -11,12 +11,16 @@ import shiny
 # Part 1: ui ----
 app_ui = shiny.ui.page_sidebar(
     shiny.ui.sidebar(
+        shiny.ui.input_slider("downscale", "Downscale factor", min=1, max=16, value=4, step=1),
         shiny.ui.input_slider("knn", "KNN threshold", min=10, max=2000, value=50, step=10),
         shiny.ui.input_slider("mog", "MOG threshold", min=1, max=64, value=4, step=1),
         shiny.ui.input_slider("kernel_open_size", "Kernel size (open)", min=3, max=19, value=5, step=2),
         shiny.ui.input_slider("kernel_close_size", "Kernel size (close)", min=3, max=19, value=7, step=2),
-        shiny.ui.input_slider("frame_number", "Frame Number", min=1, max=900, value=5, step=1, animate=True),
         shiny.ui.input_switch("precalc", "Pre-calculate background", False),
+        shiny.ui.input_switch("equalization", "Equalization", False),
+        shiny.ui.input_slider("equalization_tiles", "Equalization tiles", min=0, max=32, value=8, step=1),
+        shiny.ui.input_slider("equalization_clip", "Equalization clip", min=1, max=100, value=40, step=1),
+        shiny.ui.input_slider("frame_number", "Frame Number", min=1, max=900, value=5, step=1, animate=True),
     ),
     shiny.ui.panel_title("CamVidLog Experiments #1", "CamVidLog Experiments #1"),
     shiny.ui.output_ui("result"),
@@ -31,7 +35,16 @@ filename = random.choice(glob.glob("/workspaces/camvidlog/data/*.MP4"))
 # filename = "/workspaces/camvidlog/data/20231128221316_VD_00439.MP4"
 # hedgehog
 filename = "/workspaces/camvidlog/data/20231124015218_VD_00348.MP4"
+filename = "/workspaces/camvidlog/data/20231119233300_VD_00334.MP4"
 print(filename)
+
+
+def downscale_image(image: cv2.typing.MatLike, factor: float) -> cv2.typing.MatLike:
+    if factor == 1:
+        return image
+    else:
+        output_size = (image.shape[1] // factor, image.shape[0] // factor)
+        return cv2.resize(image, output_size)
 
 
 def image_to_b64str(image: cv2.typing.MatLike) -> bytes:
@@ -49,36 +62,39 @@ def get_clusters(frame: cv2.typing.MatLike, no_clusters=1):
     # https://docs.opencv.org/4.x/d1/d5c/tutorial_py_kmeans_opencv.html
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.5)
     # Find x,y coordinates of all non-black pixels
-    z = np.column_stack(np.where(frame > 10)).astype(np.float32)
+    z = np.column_stack(np.where(frame == 255)).astype(np.float32)
     if not len(z):
-        return [[0, 0]] * no_clusters
+        return (0, 0, frame.shape[1], frame.shape[0])
     sum_dist_sq, labels, centers = cv2.kmeans(z, no_clusters, None, criteria, 50, cv2.KMEANS_RANDOM_CENTERS)
 
     for i, center in enumerate(centers):
         points = z[np.where(labels[:, 0] == i)]
-        xmax = int(points[:, 0].max())
-        ymax = int(points[:, 1].max())
-        xmin = int(points[:, 0].min())
-        ymin = int(points[:, 1].min())
+        xmax = int(points[:, 1].max())
+        ymax = int(points[:, 0].max())
+        xmin = int(points[:, 1].min())
+        ymin = int(points[:, 0].min())
         w = xmax - xmin
         h = ymax - ymin
-        yield xmin + (w // 2), ymin + (h // 2), w, h
+        yield xmin, ymin, w, h
 
 
 # Part 2: server ----
 def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
     @shiny.reactive.Calc
     def get_frame_raw():
-        background_subtractor_knn = cv2.createBackgroundSubtractorKNN(detectShadows=False, dist2Threshold=input.knn())
-        background_subtractor_mog = cv2.createBackgroundSubtractorMOG2(detectShadows=False, varThreshold=input.mog())
+        background_subtractor_knn = cv2.createBackgroundSubtractorKNN(
+            history=900, detectShadows=False, dist2Threshold=input.knn()
+        )
+        background_subtractor_mog = cv2.createBackgroundSubtractorMOG2(
+            history=900, detectShadows=False, varThreshold=input.mog()
+        )
 
         kernel_open = np.ones((input.kernel_open_size(), input.kernel_open_size()), np.uint8)
         kernel_close = np.ones((input.kernel_close_size(), input.kernel_close_size()), np.uint8)
 
-        output_size = ()
-
         if input.precalc():
             cap = cv2.VideoCapture(filename)
+            video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             i = 0
             while True:
                 i += 1
@@ -87,11 +103,18 @@ def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
                     break
                 if not i % 50:
                     print(f"frame {i}")
-                if not output_size:
-                    output_size = (frame.shape[1] // 4, frame.shape[0] // 4)
-                frame = cv2.resize(frame, output_size)
-                background_subtractor_knn.apply(frame)  # learningRate bugged?
-                background_subtractor_mog.apply(frame, learningRate=1.0 / 900.0)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                frame = downscale_image(frame, input.downscale())
+
+                if input.equalization():
+                    clip = input.equalization_clip()
+                    clahe = cv2.createCLAHE(
+                        clipLimit=clip, tileGridSize=(input.equalization_tiles(), input.equalization_tiles())
+                    )
+                    frame = clahe.apply(frame)
+
+                background_subtractor_knn.apply(frame, learningRate=1.0 / video_length)  # learningRate bugged?
+                background_subtractor_mog.apply(frame, learningRate=1.0 / video_length)
             cap.release()
 
         track_window_knn = None
@@ -101,22 +124,24 @@ def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
         i = 0
         while i < input.frame_number():
             i += 1
-            ret, frame = cap.read()
+            ret, frame_raw = cap.read()
             if not ret:
                 break
 
             if not i % 50:
                 print(f"frame {i}")
+            frame = cv2.cvtColor(frame_raw, cv2.COLOR_BGR2GRAY)
+            frame = downscale_image(frame, input.downscale())
 
-            # downscale for speed
-            if not output_size:
-                output_size = (frame.shape[1] // 4, frame.shape[0] // 4)
-
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame = cv2.resize(frame, output_size)
+            if input.equalization():
+                clip = input.equalization_clip()
+                clahe = cv2.createCLAHE(
+                    clipLimit=clip, tileGridSize=(input.equalization_tiles(), input.equalization_tiles())
+                )
+                frame = clahe.apply(frame)
 
             if input.precalc():
-                mask_knn = background_subtractor_knn.apply(frame)  # learningRate bugged?
+                mask_knn = background_subtractor_knn.apply(frame, learningRate=0)  # learningRate bugged?
                 mask_mog = background_subtractor_mog.apply(frame, learningRate=0)
             else:
                 mask_knn = background_subtractor_knn.apply(frame)
@@ -129,35 +154,49 @@ def server(input: Any, output: Any, session: Any) -> Any:  # noqa: A002, ARG001
             mask_mog = cv2.morphologyEx(mask_mog, cv2.MORPH_OPEN, kernel_open)
             mask_mog = cv2.morphologyEx(mask_mog, cv2.MORPH_CLOSE, kernel_close)
 
-            if not track_window_knn:
-                # k means clustering to get initial point
-                clusters = tuple(get_clusters(mask_knn, 3))
-                if clusters:
-                    track_window_knn = clusters[0]
+            clusters = tuple(get_clusters(mask_knn, 3))
+            cluster_knn = clusters[0] if clusters else None
 
-            if not track_window_mog:
-                # k means clustering to get initial point
-                clusters = tuple(get_clusters(mask_mog, 3))
-                if clusters:
-                    track_window_mog = clusters[0]
+            clusters = tuple(get_clusters(mask_mog, 3))
+            cluster_mog = clusters[0] if clusters else None
 
             term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 1000, 1)
 
-            if track_window_knn:
-                rect_knn, new_track_window_knn = cv2.CamShift(mask_knn, track_window_knn, term_crit)
-                if new_track_window_knn:
-                    track_window_knn = new_track_window_knn
+            if not track_window_knn and cluster_knn:
+                track_window_knn = cluster_knn
+            rect_knn, new_track_window_knn = cv2.CamShift(mask_knn, track_window_knn, term_crit)
+            if new_track_window_knn:
+                track_window_knn = new_track_window_knn
 
+            if not track_window_mog and cluster_mog:
+                track_window_mog = cluster_mog
             if track_window_mog:
                 rect_mog, new_track_window_mog = cv2.CamShift(mask_mog, track_window_mog, term_crit)
                 if new_track_window_mog:
                     track_window_mog = new_track_window_mog
 
         frame_boxed_knn = frame.copy()
+        frame_boxed_mog = frame.copy()
+
+        if cluster_knn:
+            frame_boxed_knn = cv2.rectangle(
+                frame_boxed_knn,
+                (cluster_knn[0], cluster_knn[1]),
+                (cluster_knn[0] + cluster_knn[2], cluster_knn[1] + cluster_knn[3]),
+                128,
+                1,
+            )
         if rect_knn:
             frame_boxed_knn = cv2.polylines(frame_boxed_knn, [np.intp(cv2.boxPoints(rect_knn))], True, 255, 1)
 
-        frame_boxed_mog = frame.copy()
+        if cluster_mog:
+            frame_boxed_mog = cv2.rectangle(
+                frame_boxed_mog,
+                (cluster_mog[0], cluster_mog[1]),
+                (cluster_mog[0] + cluster_mog[2], cluster_mog[1] + cluster_mog[3]),
+                128,
+                1,
+            )
         if rect_mog:
             frame_boxed_mog = cv2.polylines(frame_boxed_mog, [np.intp(cv2.boxPoints(rect_mog))], True, 255, 1)
 
