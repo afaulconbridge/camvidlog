@@ -8,7 +8,7 @@ import numpy as np
 from numpy import ndarray
 
 from camvidlog.config import ConfigService, setup_logging
-from camvidlog.cv.service import ComputerVisionService
+from camvidlog.cv.service_owl import ComputerVisionService, ComputerVisionServiceOWL
 from camvidlog.db.service import DbService
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def make_thumbnail(image: ndarray, size=(120, 120)) -> bytes:
     if image.shape[2] == 1:
         # already greyscale no action needed
         pass
-    elif image.shape[2] == 3:
+    elif image.shape[2] == 3:  # noqa: PLR2004
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         msg = "Unexpected image shape"
@@ -92,7 +92,7 @@ def make_thumbnail(image: ndarray, size=(120, 120)) -> bytes:
 
 
 def handle_filename(filename: str, config: ConfigService) -> None:
-    cv_service = ComputerVisionService()
+    cv_service: ComputerVisionService = ComputerVisionServiceOWL()
     db_service = DbService(config.database_url)
 
     # TODO move this into a separate VideoService ?
