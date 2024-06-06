@@ -7,7 +7,7 @@ from typing import Generator, Iterable, Optional
 import cv2
 import torch
 from PIL import Image
-from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
+from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor, GroundingDinoProcessor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,13 +65,15 @@ class ImageManager:
         threshold_text: float = 0.25,
     ):
         self.model_id = model_id
-        self.text_queries = ". ".join(queries) + ". "
+        self.text_queries = ". ".join(queries) + "."
         self.threshold_box = threshold_box
         self.threshold_text = threshold_text
 
     def __enter__(self):
         logger.debug("Creating Autoprocessor")
-        self.processor = AutoProcessor.from_pretrained(self.model_id)
+        self.processor: GroundingDinoProcessor = AutoProcessor.from_pretrained(self.model_id)
+        # process the text input now, as it doesn't change frame-to-frame
+        self.processor_input_ids = self.processor(text=self.text_queries, return_tensors="pt").to("cuda")
         logger.debug("Creating AutoModelForZeroShotObjectDetection")
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id).to("cuda")
         return self
@@ -79,14 +81,14 @@ class ImageManager:
     def __exit__(self, type, value, traceback):
         pass
 
-    def process(self, image: cv2.typing.MatLike) -> None:
+    def process(self, image: cv2.typing.MatLike) -> Generator[tuple[float, str, tuple[int, int, int, int]], None, None]:
         image_pillow = Image.fromarray(image)
-        inputs = self.processor(images=image_pillow, text=self.text_queries, return_tensors="pt").to("cuda")
+        inputs = self.processor(images=image_pillow, return_tensors="pt").to("cuda")
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            outputs = self.model(**inputs, **self.processor_input_ids)
             results = self.processor.post_process_grounded_object_detection(
                 outputs,
-                inputs.input_ids,
+                self.processor_input_ids.input_ids,
                 box_threshold=self.threshold_box,
                 text_threshold=self.threshold_text,
                 target_sizes=[image_pillow.size[::-1]],
