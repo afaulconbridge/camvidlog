@@ -7,10 +7,14 @@
 
 **Table of Contents**
 
-- [Installation](#installation)
-- [Execution](#execution)
-- [Development](#development)
-- [License](#license)
+- [CamVidLog](#camvidlog)
+  - [Installation](#installation)
+  - [Execution](#execution)
+  - [Development](#development)
+  - [License](#license)
+  - [Blog](#blog)
+    - [Image enhancement](#image-enhancement)
+    - [Difficult animals](#difficult-animals)
 
 ## Installation
 
@@ -55,6 +59,11 @@ Run linting checks etc with:
 hatch -e lint run all
 ```
 
+Monitor hardware with:
+
+```console
+nvtop
+```
 
 ## License
 
@@ -64,7 +73,7 @@ hatch -e lint run all
 
 ### Image enhancement
 
-The primary source is a trail camera that has an infrared light. This tends to produce images that are well or over-lit in the centre, and under-lit at the edges. So the idea was that by enhancing the source image, the matches would be better. After all, this works for humans. 
+The primary source is a trail camera that has an infrared light. This tends to produce images that are well or over-lit in the centre, and under-lit at the edges. So the idea was that by enhancing the source image, the matches would be better. After all, this works for humans.
 
 In practice, this does not work. We can do nice contrast balancing, and it works well in thumbnail generation, but the image detection seems to become worse rather than better.
 
