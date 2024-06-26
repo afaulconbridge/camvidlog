@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Generator, Iterable, Optional
 
@@ -48,7 +49,7 @@ class VideoManager:
             # get next frame
             sucess, frame = self.capture.read()
             frame_no += 1
-            frame_time += 1.0 / self.fps
+            frame_time = frame_no / self.fps
 
 
 class ImageManager:
@@ -99,6 +100,7 @@ class ImageManager:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="CamVidLogScan", description="Scans video files to find things")
+    parser.add_argument("--dryrun", "-d", action="store_true")
     parser.add_argument("filename", nargs="+")
     args = parser.parse_args()
 
@@ -110,14 +112,20 @@ if __name__ == "__main__":
     for filename in args.filename:
         output = str(Path(filename).with_suffix("").with_suffix(".json"))
 
-        results = {}
-        result_frames = []
-        results["frames"] = result_frames
+        # merge with existing file if it exists
+        if os.path.exists(output):
+            with open(output) as outfile:
+                results = json.load(outfile)
+                result_frames = results["frames"]
+        else:
+            results = {}
+            result_frames = []
+            results["frames"] = result_frames
 
         with ImageManager(queries) as imagemanager:
             with VideoManager(filename) as videomanager:
                 process_time = 0.0
-                process_interval = 1.0
+                process_interval = 1.0 / 10
                 for i, time, frame in videomanager.generate_frames():
                     if "fps" not in results:
                         results["fps"] = videomanager.fps
@@ -137,6 +145,6 @@ if __name__ == "__main__":
                         # move to next slot
                         process_time += process_interval
 
-        # TODO merge with existing file if it exists
-        with open(output, "w") as outfile:
-            json.dump(results, outfile, indent=2, sort_keys=True)
+        if not args.dryrun:
+            with open(output, "w") as outfile:
+                json.dump(results, outfile, indent=2, sort_keys=True)
