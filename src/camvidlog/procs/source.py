@@ -1,83 +1,67 @@
 import argparse
-from contextlib import contextmanager
-from multiprocessing import JoinableQueue, Process
+from multiprocessing import Process, Queue
 from multiprocessing.shared_memory import SharedMemory
-from pathlib import Path
 
 import cv2
-import numpy as np
+
+from camvidlog.procs.basics import FileReader, FrameConsumer, FrameConsumerProducer
 
 
-@contextmanager
-def video_capture_context(videopath: str):
-    video_capture = cv2.VideoCapture(videopath, cv2.CAP_ANY)
-    try:
-        yield video_capture
-    finally:
-        video_capture.release()
+class SaveToFile(FrameConsumer):
+    out: cv2.VideoWriter | None
+
+    def __init__(self, shared_memory_name: str, filename):
+        super().__init__(shared_memory_name=shared_memory_name)
+        self.filename = filename
+        self.out = None
+
+    def process_frame(self, frame) -> None:
+        if not self.out:
+            self.out = cv2.VideoWriter(
+                self.filename,
+                cv2.VideoWriter_fourcc(*"MJPG"),
+                # cv2.VideoWriter_fourcc(*"X264"),
+                self.fps,
+                (self.shape[1], self.shape[0]),
+                isColor=(self.shape[2] == 3),  # noqa: PLR2004
+            )
+        self.out.write(frame)
+
+    def cleanup(self) -> None:
+        super().cleanup()
+        self.out.release()
 
 
-def _vid_reader(
-    videopath: Path,
-    shared_memory_name: str,
-    output_queue: JoinableQueue,
-):
-    with video_capture_context(str(videopath)) as video_capture:
-        fps = float(video_capture.get(cv2.CAP_PROP_FPS))
-        x = cv2.CAP_PROP_FRAME_WIDTH
-        y = cv2.CAP_PROP_FRAME_HEIGHT
+class BackgroundSubtractorMOG2(FrameConsumerProducer):
+    background_subtractor: cv2.BackgroundSubtractorMOG2
 
-        frame_no = 0
-        frame_time = 0.0
-        shared_memory = None
-        shared_array = None
-        sucess = True
-        while sucess:
-            # first frame is read without shared memory
-            sucess, frame = video_capture.read(shared_array)
-            if sucess:
-                if frame is not None and shared_memory is None:
-                    # create the shared memory _after_ reading the first frame
-                    # so we know how much shared memory we need
-                    shared_memory = SharedMemory(name=shared_memory_name, create=True, size=frame.nbytes)
-                    shared_array = np.ndarray(frame.shape, dtype=frame.dtype, buffer=shared_memory.buf)
-                    shared_array[:] = frame[:]
-                output_queue.put((frame_no, frame_time, frame.shape, frame.dtype))
-                # wait for the queue to be read from
-                output_queue.join()
-                # move on to next frame
-                frame_no += 1
-                frame_time = frame_no / fps
+    def __init__(self, shared_memory_in_name: str, shared_memory_out_name: str, history: int = 500, var_threshold=16):
+        super().__init__(shared_memory_in_name=shared_memory_in_name, shared_memory_out_name=shared_memory_out_name)
+        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
+            history=history, detectShadows=False, varThreshold=var_threshold
+        )
 
-        # put the sentinel into the queue
-        output_queue.put(None)
-        # wait for the sentinel to be read
-        # otherwise shared memory of the last frame will close too soon
-        output_queue.join()
-        shared_memory.close()
-        shared_memory.unlink()
+    def process_frame(self, frame_in, frame_out) -> None:
+        self.background_subtractor.apply(frame_in, frame_out)
 
 
-def _vid_saver(
-    shared_memory_name: str,
-    output_queue: JoinableQueue,
-):
-    shared_memory = None
-    shared_array = None
-    # get things in the queue until the sentinel
-    while item := output_queue.get():
-        frame_no, frame_time, shape, dtype = item
-        if not shared_memory:
-            shared_memory = SharedMemory(name=shared_memory_name, create=False)
-            shared_array = np.ndarray(shape, dtype=dtype, buffer=shared_memory.buf)
-        print(frame_no)
-        print(shared_memory.buf)
-        print(shared_array.sum())
-        output_queue.task_done()
+class BackgroundSubtractorKNN(FrameConsumerProducer):
+    background_subtractor: cv2.BackgroundSubtractorKNN
 
-    shared_memory.close()
-    # say we've processed the sentinel
-    output_queue.task_done()
+    def __init__(
+        self,
+        shared_memory_in_name: str,
+        shared_memory_out_name: str,
+        history: int = 500,
+        dist2_threshold: float = 400.0,
+    ):
+        super().__init__(shared_memory_in_name, shared_memory_out_name)
+        self.background_subtractor = cv2.createBackgroundSubtractorKNN(
+            history=history, detectShadows=False, dist2Threshold=dist2_threshold
+        )
+
+    def process_frame(self, frame_in, frame_out) -> None:
+        self.background_subtractor.apply(frame_in, frame_out)
 
 
 if __name__ == "__main__":
@@ -85,16 +69,25 @@ if __name__ == "__main__":
     parser.add_argument("filename")
     args = parser.parse_args()
 
-    queue_reader = JoinableQueue(1)
+    ps = []
+    processor_queue = Queue(1)
+    ps.append(Process(target=FileReader(args.filename, "fa"), args=(processor_queue,)))
+    sink_queue = Queue(1)
+    ps.append(Process(target=BackgroundSubtractorMOG2("fa", "fb"), args=(processor_queue, sink_queue)))
+    # ps.append(Process(target=BackgroundSubtractorKNN("fa", "fb"), args=(processor_queue, sink_queue)))
+    ps.append(Process(target=SaveToFile("fb", "output.avi"), args=(sink_queue,)))
 
-    p_reader = Process(
-        target=_vid_reader,
-        args=(Path(args.filename), "frame", queue_reader),
-    )
-    p_printer = Process(target=_vid_saver, args=("frame", queue_reader))
+    processor_queue = Queue(1)
+    # ps.append(Process(target=FileReader(args.filename, "fa"), args=(processor_queue,)))
+    # ps.append(Process(target=SaveToFile("fa", "output.avi"), args=(processor_queue,)))
 
-    p_reader.start()
-    p_printer.start()
+    for p in ps:
+        p.start()
 
-    p_printer.join()
-    p_reader.join()
+    for p in ps:
+        p.join()
+
+    for name in "fa", "fb":
+        for i in (0, 1):
+            shared_memory_obj = SharedMemory(name=f"{name}_{i}", create=False)
+            shared_memory_obj.unlink()
