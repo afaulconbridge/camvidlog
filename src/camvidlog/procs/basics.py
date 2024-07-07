@@ -1,7 +1,7 @@
-from contextlib import contextmanager
+from dataclasses import dataclass
 from multiprocessing import Queue
-from multiprocessing.resource_tracker import unregister
 from multiprocessing.shared_memory import SharedMemory
+from typing import Generator
 
 import cv2
 import numpy as np
@@ -9,170 +9,275 @@ import numpy as np
 TIMEOUT = 60.0
 
 
-@contextmanager
-def video_capture_context(videopath: str):
-    video_capture = cv2.VideoCapture(videopath, cv2.CAP_ANY)
+@dataclass
+class VideoFileStats:
+    filename: str
+    fps: float
+    x: int
+    y: int
+    bw: bool
+    nbytes: int
+    dtype: np.dtype
+
+    @property
+    def shape(self):
+        return (self.y, self.x, 1 if self.bw else 3)
+
+
+def peek_in_file(filename: str) -> VideoFileStats:
+    video_capture = None
     try:
-        yield video_capture
+        video_capture = cv2.VideoCapture(filename, cv2.CAP_ANY)
+        fps = float(video_capture.get(cv2.CAP_PROP_FPS))
+        # frame details are more reliable than capture properties
+        # x = cv2.CAP_PROP_FRAME_WIDTH
+        # y = cv2.CAP_PROP_FRAME_HEIGHT
+        # bw = cv2.CAP_PROP_MONOCHROME
+        (success, frame) = video_capture.read()
+        if not success:
+            msg = f"Unable to read frame from {filename}"
+            raise RuntimeError(msg)
+        y = frame.shape[0]
+        x = frame.shape[1]
+        bw = frame.shape[2] == 1
+        return VideoFileStats(filename=filename, fps=fps, x=x, y=y, bw=bw, nbytes=frame.nbytes, dtype=frame.dtype)
     finally:
-        video_capture.release()
+        if video_capture:
+            video_capture.release()
+            video_capture = None
 
 
 class FileReader:
     videopath: str
-    shared_memory_name: str
+    shared_memory_names: tuple[str, ...]
+    shared_memory: tuple[SharedMemory, ...]
+    shared_arrays: tuple[np.ndarray]
+    shared_pointer: int
+    fps: float
+    queue: Queue
+    video_capture: cv2.VideoCapture | None
 
-    def __init__(self, videopath: str, shared_memory_name: str):
+    def __init__(
+        self,
+        videopath: str,
+        fps: float,
+        queue: Queue,
+        shared_memory_names: tuple[str, ...],
+        shape: tuple[int, int, int],
+        dtype: np.dtype,
+    ):
         self.videopath = videopath
-        self.shared_memory_name = shared_memory_name
-        self.shared_memory = []
-        self.shared_array = []
-
-    def _init_memory(self, nbytes: int, shape, dtype):
-        for i in range(2):
-            name = f"{self.shared_memory_name}_{i}"
-            shared_memory_obj = SharedMemory(name=name, create=True, size=nbytes)
-            self.shared_memory.append(shared_memory_obj)
-            self.shared_array.append(np.ndarray(shape, dtype=dtype, buffer=shared_memory_obj.buf))
-
-            # dangerous - tells python that this is not the shared memory it is looking for
-            # pro - avoids UserWarning because python is over-eager in cleaning ended proesses
-            # con - could leak, fragile to internal implementation
-            # unregister(shared_memory_obj._name, "shared_memory")
+        self.fps = fps
+        self.queue = queue
+        self.shared_memory_names = shared_memory_names
+        self.shape = shape
+        self.dtype = dtype
 
         self.shared_pointer = 0
 
-    def __call__(self, output_queue: Queue):
-        with video_capture_context(str(self.videopath)) as video_capture:
-            fps = float(video_capture.get(cv2.CAP_PROP_FPS))
-            x = cv2.CAP_PROP_FRAME_WIDTH
-            y = cv2.CAP_PROP_FRAME_HEIGHT
-
+    def __call__(
+        self,
+    ):
+        with self:
             frame_no = 0
             frame_time = 0.0
-            success = True
-            while success:
-                # first frame is read without shared memory
-                if frame_no == 0:
-                    success, frame = video_capture.read()
-                    # create the shared memory _after_ reading the first frame
-                    # so we know how much shared memory we need
-                    self._init_memory(frame.nbytes, frame.shape, frame.dtype)
-                    # put the image into shared memory
-                    self.shared_array[self.shared_pointer][:] = frame[:]
+            while True:
+                (success, frame) = self.video_capture.read(self.shared_arrays[self.shared_pointer])
+                if not success:
+                    break
+
+                self.queue.put(
+                    (self.shared_memory_names[self.shared_pointer], frame_no, frame_time),
+                    timeout=TIMEOUT,
+                )
+
+                frame_no += 1
+                frame_time = frame_no / self.fps
+
+                if self.shared_pointer == 0:
+                    self.shared_pointer = 1
                 else:
-                    # only work with two shared arrays
-                    # any more and it hangs?!?
-                    success, frame = video_capture.read(self.shared_array[self.shared_pointer])
+                    self.shared_pointer = 0
 
-                if success:
-                    output_queue.put(
-                        (self.shared_pointer, frame_no, frame_time, fps, frame.shape, frame.dtype), timeout=TIMEOUT
-                    )
-                    # move on to next frame
-                    frame_no += 1
-                    frame_time = frame_no / fps
-                    if self.shared_pointer == 0:
-                        self.shared_pointer = 1
-                    else:
-                        self.shared_pointer = 0
+    def __enter__(self) -> None:
+        self.video_capture = cv2.VideoCapture(self.videopath, cv2.CAP_ANY)
 
-            for i in range(2):
-                self.shared_memory[i].close()
+        self.shared_memory = tuple(SharedMemory(name, False) for name in self.shared_memory_names)
+        self.shared_arrays = tuple(
+            np.ndarray(self.shape, dtype=self.dtype, buffer=shared_memory.buf) for shared_memory in self.shared_memory
+        )
 
-            # put the sentinel into the queue
-            output_queue.put(None)
-            output_queue.close()
+    def __exit__(self, _type, value, traceback) -> None:
+        self.video_capture.release()
+
+        for mem in self.shared_memory:
+            mem.close()
+        self.shared_memory = ()
+        self.shared_arrays = ()
+
+        # sent end sentinel
+        self.queue.put(None, timeout=TIMEOUT)
 
 
 class FrameConsumer:
-    def __init__(self, shared_memory_name: str):
-        self.shared_memory_name = shared_memory_name
+    queue: Queue
+    shape: tuple[int, int, int]
+    dtype: np.dtype
+    shared_memory = dict[str, SharedMemory]
+    shared_array = dict[str, np.ndarray]
 
-    def __call__(self, input_queue: Queue):
-        shared_memory = []
-        shared_array = []
+    def __init__(
+        self,
+        queue: Queue,
+        shape: tuple[int, int, int],
+        dtype: np.dtype,
+    ):
+        self.queue = queue
+        self.shape = shape
+        self.dtype = dtype
+        self.shared_memory = {}
+        self.shared_array = {}
 
-        while item := input_queue.get(timeout=TIMEOUT):
-            ring_pointer, frame_no, frame_time, fps, shape, dtype = item
-            self.shape = shape
-            self.fps = fps
-            if ring_pointer >= len(shared_memory):
-                shared_memory.append(SharedMemory(name=f"{self.shared_memory_name}_{ring_pointer}", create=False))
-                shared_array.append(np.ndarray(shape, dtype=dtype, buffer=shared_memory[-1].buf))
-
-            self.process_frame(shared_array[ring_pointer])
+    def __call__(self):
+        while item := self.queue.get(timeout=TIMEOUT):
+            shared_memory_name, frame_no, frame_time = item
+            if shared_memory_name not in self.shared_memory:
+                self.shared_memory[shared_memory_name] = SharedMemory(name=shared_memory_name, create=False)
+                self.shared_array[shared_memory_name] = np.ndarray(
+                    self.shape, dtype=self.dtype, buffer=self.shared_memory[shared_memory_name].buf
+                )
+            self.process_frame(self.shared_array[shared_memory_name])
 
         self.cleanup()
-        input_queue.close()
+        self.queue.close()
 
-        for shared_memory_item in shared_memory:
+        for shared_memory_item in self.shared_memory.values():
             shared_memory_item.close()
 
     def process_frame(self, frame) -> None:
         pass
 
     def cleanup(self) -> None:
-        pass
+        for mem in self.shared_memory.values():
+            mem.close()
 
 
 class FrameConsumerProducer:
-    def __init__(self, shared_memory_in_name: str, shared_memory_out_name: str):
-        self.shared_memory_in_name = shared_memory_in_name
-        self.shared_memory_out_name = shared_memory_out_name
+    queue_in: Queue
+    queue_out: Queue
+    shape: tuple[int, int, int]
+    dtype: np.dtype
+    shared_memory_in = dict[str, SharedMemory]
+    shared_array_in = dict[str, np.ndarray]
+    shared_memory_names_out: tuple[str, ...]
+    shared_memory_out: tuple[SharedMemory, ...]
+    shared_array_out: tuple[np.ndarray]
+    shared_pointer: int
 
-    def __call__(self, input_queue: Queue, output_queue: Queue):
-        shared_memory_in = []
-        shared_array_in = []
-        shared_memory_out = []
-        shared_array_out = []
-        ring_pointer_out = 0
+    def __init__(
+        self,
+        queue_in: Queue,
+        queue_out: Queue,
+        shared_memory_names_out: tuple[str, ...],
+        shape: tuple[int, int, int],
+        dtype: np.dtype,
+    ):
+        self.queue_in = queue_in
+        self.queue_out = queue_out
+        self.shared_memory_names_out = shared_memory_names_out
+        self.shape = shape
+        self.dtype = dtype
+        self.shared_memory_in = {}
+        self.shared_array_in = {}
+        self.shared_pointer = 0
 
-        while item := input_queue.get(timeout=TIMEOUT):
-            ring_pointer_in, frame_no, frame_time, fps, shape, dtype = item
+    def __call__(self):
+        with self:
+            while item := self.queue_in.get(timeout=TIMEOUT):
+                shared_memory_name_in, frame_no, frame_time = item
 
-            # setup input frame
-            if ring_pointer_in >= len(shared_memory_in):
-                shared_memory_in.append(
-                    SharedMemory(name=f"{self.shared_memory_in_name}_{ring_pointer_in}", create=False)
-                )
-                shared_array_in.append(np.ndarray(shape, dtype=dtype, buffer=shared_memory_in[-1].buf))
-
-            # setup output
-            if not shared_memory_out:
-                for i in range(2):
-                    shared_memory_obj = SharedMemory(
-                        name=f"{self.shared_memory_out_name}_{i}",
-                        create=True,
-                        size=shared_array_in[ring_pointer_in].nbytes,
+                if shared_memory_name_in not in self.shared_memory_in:
+                    self.shared_memory_in[shared_memory_name_in] = SharedMemory(
+                        name=shared_memory_name_in, create=False
                     )
-                    shared_memory_out.append(shared_memory_obj)
-                    shared_array_out.append(np.ndarray(shape, dtype=dtype, buffer=shared_memory_obj.buf))
+                    self.shared_array_in[shared_memory_name_in] = np.ndarray(
+                        self.shape, dtype=self.dtype, buffer=self.shared_memory_in[shared_memory_name_in].buf
+                    )
 
-                    # dangerous - tells python that this is not the shared memory it is looking for
-                    # pro - avoids UserWarning because python is over-eager in cleaning ended proesses
-                    # con - could leak, fragile to internal implementation
-                    # unregister(shared_memory_obj._name, "shared_memory")
-                ring_pointer_out = 0
+                has_output = self.process_frame(
+                    self.shared_array_in[shared_memory_name_in],
+                    self.shared_array_out[self.shared_pointer],
+                )
 
-            # actually handle the processing
-            self.process_frame(shared_array_in[ring_pointer_in], shared_array_out[ring_pointer_out])
+                if has_output:
+                    self.queue_out.put(
+                        (self.shared_memory_names_out[self.shared_pointer], frame_no, frame_time),
+                        timeout=TIMEOUT,
+                    )
 
-            output_queue.put((ring_pointer_out, frame_no, frame_time, fps, shape, dtype), timeout=TIMEOUT)
+                    if self.shared_pointer == 0:
+                        self.shared_pointer = 1
+                    else:
+                        self.shared_pointer = 0
 
-            if ring_pointer_out == 0:
-                ring_pointer_out = 1
-            else:
-                ring_pointer_out = 0
+    def __enter__(self) -> None:
+        self.shared_memory_out = tuple(SharedMemory(name, False) for name in self.shared_memory_names_out)
+        self.shared_array_out = tuple(
+            np.ndarray(self.shape, dtype=self.dtype, buffer=shared_memory.buf)
+            for shared_memory in self.shared_memory_out
+        )
 
-        input_queue.close()
+    def __exit__(self, _type, value, traceback) -> None:
+        for mem in self.shared_memory_in.values():
+            mem.close()
+        self.shared_memory_in = ()
+        self.shared_arrays_in = ()
 
-        for shared_memory_item in shared_memory_in:
-            shared_memory_item.close()
+        self.queue_in.close()
+        # sent end sentinel
+        self.queue_out.put(None, timeout=TIMEOUT)
 
-        # put the sentinel into the queue
-        output_queue.put(None)
-        output_queue.close()
+    def process_frame(self, frame_in: np.ndarray, frame_out: np.ndarray) -> bool:
+        frame_out[:] = frame_in[:]
+        return True
 
-    def process_frame(self, frame_in, frame_out) -> None:
+
+class SharedMemoryQueueResources:
+    queue: Queue
+    _shared_memory: tuple[SharedMemory, ...]
+
+    def __init__(self, nbytes: int, size: int = 2):
+        if size < 2:  # noqa: PLR2004
+            msg = "size < 2"
+            raise ValueError(msg)
+        self.queue = Queue(size - 1)
+        self._shared_memory = tuple(SharedMemory(create=True, size=nbytes) for _ in range(size))
+        self.shared_memory_names = tuple(m.name for m in self._shared_memory)
+
+    def __enter__(self) -> None:
         pass
+
+    def __exit__(self, _type, value, traceback) -> None:
+        self.close()
+
+    def close(self) -> None:
+        for mem in self._shared_memory:
+            mem.close()
+            mem.unlink()
+
+
+def generate_from_queue_source(queue: Queue, timeout: float | None = None) -> Generator[SharedMemory, None, None]:
+    memory_map = {}
+    try:
+        while item := queue.get(timeout=timeout):
+            name = item[0]
+            if shared_memory := memory_map[name]:
+                pass
+            else:
+                shared_memory = SharedMemory(name, create=False)
+                memory_map[name] = shared_memory
+
+            yield shared_memory, *item[1:]
+    finally:
+        for shared_memory in memory_map.values():
+            shared_memory.close()
