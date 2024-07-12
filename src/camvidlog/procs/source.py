@@ -110,7 +110,7 @@ class BackgroundSubtractorKNN(FrameConsumerProducer):
 
 class Rescaler(FrameConsumerProducer):
     res: tuple[int, int]
-    fps: int | None
+    fps_ratio: float
 
     def __init__(
         self,
@@ -121,7 +121,8 @@ class Rescaler(FrameConsumerProducer):
         shape_out: tuple[int, int, int],
         dtype_in: np.dtype,
         dtype_out: np.dtype,
-        fps: int | None,
+        fps_in: int,
+        fps_out: int,
     ):
         super().__init__(
             queue_in=queue_in,
@@ -133,10 +134,13 @@ class Rescaler(FrameConsumerProducer):
             dtype_out=dtype_out,
         )
         self.res = (shape_out[1], shape_out[0])  # needs to be x,y but shape is y,x
-        self.fps = fps
+        if fps_out > fps_in:
+            msg = "fps_out cannot be greater than fps_in"
+            raise ValueError(msg)
+        self.fps_ratio = fps_in / fps_out
 
     def process_frame(self, frame_in, frame_out) -> bool:
-        if self.fps is None or self.frame_no % self.fps < 1:
+        if self.frame_no % self.fps_ratio < 1.0:
             cv2.resize(frame_in, self.res, frame_out)
             return True
         else:
@@ -173,7 +177,8 @@ if __name__ == "__main__":
         (*Resolution.SD.value, 3),
         vidstats.dtype,
         vidstats.dtype,
-        fps=None,
+        fps_in=30,
+        fps_out=5,
     )
     background_subtractor = BackgroundSubtractorMOG2(
         q2.queue,
@@ -184,7 +189,7 @@ if __name__ == "__main__":
     )
     save_to_file = SaveToFile(
         "output.avi",
-        30.0,
+        5,
         q3.queue,
         (*Resolution.SD.value, 3),
         vidstats.dtype,
