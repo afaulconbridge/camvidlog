@@ -302,3 +302,30 @@ def generate_from_queue_source(queue: Queue, timeout: float | None = None) -> Ge
     finally:
         for shared_memory in memory_map.values():
             shared_memory.close()
+
+
+class DataRecorder:
+    queue: Queue
+    sentinels_max: int
+    sentinels_current: int
+    metrics: dict[int, dict[str, int | float]]
+
+    def __init__(self, queue: Queue, sentinels_max: int):
+        self.queue = queue
+        self.sentinels_max = sentinels_max
+        self.sentinels_current = 0
+        self.metrics = {}
+
+    def __call__(self):
+        running = True
+        while running:
+            item = self.queue_in.get(timeout=TIMEOUT)
+            if item is None:
+                self.sentinels_current += 1
+                if self.sentinels_current >= self.sentinels_max:
+                    running = False
+            else:
+                frame_no, metric, value = item
+                if metric not in self.metrics:
+                    self.metrics[metric] = {}
+                self.metrics[metric][frame_no] = value
