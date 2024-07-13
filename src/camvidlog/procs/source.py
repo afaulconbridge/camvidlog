@@ -157,9 +157,9 @@ if __name__ == "__main__":
 
     # need to assign shared memory from the parent process
     # otherwise it will be eagerly cleaned up when the child terminates
-    q1 = SharedMemoryQueueResources(vidstats.nbytes, size=3)
-    q2 = SharedMemoryQueueResources(vidstats.nbytes, size=3)
-    q3 = SharedMemoryQueueResources(vidstats.nbytes, size=3)
+    q1 = SharedMemoryQueueResources(vidstats.nbytes)
+    q2 = SharedMemoryQueueResources(vidstats.nbytes)
+    q3 = SharedMemoryQueueResources(vidstats.nbytes)
 
     file_reader = FileReader(
         args.filename,
