@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: 2023-present U.N. Owen <void@some.where>
-#
-# SPDX-License-Identifier: MIT
+import logging
 
-import os
+import yaml
 
 
-def get_data(path):
-    return os.path.join(os.path.abspath(os.path.dirname(__file__)), "data", path)
+def setup_logging(config_filename: str = "logging.yml") -> None:
+    # see https://docs.python.org/3/library/logging.config.html#logging-config-dictschema
+    with open(config_filename) as config_file:
+        config = yaml.safe_load(config_file)
+    logging.config.dictConfig(config)

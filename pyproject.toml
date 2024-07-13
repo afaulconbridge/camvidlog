@@ -25,13 +25,9 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "shiny",
-  "sqlmodel",
-  "transformers",
   "opencv-python-headless",
-  "torch",
-  "pillow",
   "ffmpeg-python",
+  "transformers",
 ]
 
 [dirs.env]
@@ -63,7 +59,7 @@ dependencies = ["black>=23.1.0", "mypy>=1.0.0", "ruff>=0.0.243"]
 [tool.hatch.envs.lint.scripts]
 typing = "mypy --install-types --non-interactive {args:src/camvidlog tests}"
 style = ["ruff {args:.}", "black --check --diff {args:.}"]
-fmt = ["black {args:.}", "ruff --fix {args:.}", "style"]
+fmt = ["black {args:.}", "ruff check --fix {args:.}", "style"]
 all = ["style", "typing"]
 
 [tool.black]
