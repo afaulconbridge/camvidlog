@@ -1,3 +1,4 @@
+from csv import DictWriter
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import Queue
@@ -7,7 +8,7 @@ from typing import Generator
 import cv2
 import numpy as np
 
-TIMEOUT = 60.0
+TIMEOUT = 180.0
 
 
 class Resolution(Enum):
@@ -150,22 +151,28 @@ class FrameConsumer:
         self.shared_array = {}
 
     def __call__(self):
-        while item := self.queue.get(timeout=TIMEOUT):
-            shared_memory_name, frame_no, frame_time = item
-            self.frame_no = frame_no
+        try:
+            self.setup()
 
-            if shared_memory_name not in self.shared_memory:
-                self.shared_memory[shared_memory_name] = SharedMemory(name=shared_memory_name, create=False)
-                self.shared_array[shared_memory_name] = np.ndarray(
-                    self.shape, dtype=self.dtype, buffer=self.shared_memory[shared_memory_name].buf
-                )
-            self.process_frame(self.shared_array[shared_memory_name])
+            while item := self.queue.get(timeout=TIMEOUT):
+                shared_memory_name, frame_no, frame_time = item
+                self.frame_no = frame_no
 
-        self.cleanup()
-        self.queue.close()
+                if shared_memory_name not in self.shared_memory:
+                    self.shared_memory[shared_memory_name] = SharedMemory(name=shared_memory_name, create=False)
+                    self.shared_array[shared_memory_name] = np.ndarray(
+                        self.shape, dtype=self.dtype, buffer=self.shared_memory[shared_memory_name].buf
+                    )
+                self.process_frame(self.shared_array[shared_memory_name])
+        finally:
+            self.cleanup()
+            self.queue.close()
 
-        for shared_memory_item in self.shared_memory.values():
-            shared_memory_item.close()
+            for shared_memory_item in self.shared_memory.values():
+                shared_memory_item.close()
+
+    def setup(self) -> None:
+        pass
 
     def process_frame(self, frame) -> None:
         pass
@@ -310,22 +317,37 @@ class DataRecorder:
     sentinels_current: int
     metrics: dict[int, dict[str, int | float]]
 
-    def __init__(self, queue: Queue, sentinels_max: int):
+    def __init__(self, queue: Queue, sentinels_max: int, outfilename: str):
         self.queue = queue
         self.sentinels_max = sentinels_max
         self.sentinels_current = 0
         self.metrics = {}
+        self.outfilename = outfilename
 
     def __call__(self):
         running = True
+        frame_max = 0
         while running:
-            item = self.queue_in.get(timeout=TIMEOUT)
+            item = self.queue.get(timeout=TIMEOUT)
             if item is None:
                 self.sentinels_current += 1
                 if self.sentinels_current >= self.sentinels_max:
                     running = False
             else:
                 frame_no, metric, value = item
+                frame_max = max(frame_max, frame_no)
                 if metric not in self.metrics:
                     self.metrics[metric] = {}
                 self.metrics[metric][frame_no] = value
+
+        with open(self.outfilename, "w") as outfile:
+            dict_writer = DictWriter(outfile, ("frame_no",) + tuple(self.metrics.keys()))
+            dict_writer.writeheader()
+            for i in range(frame_max):
+                row = {}
+                for metric in self.metrics:
+                    if i in self.metrics[metric]:
+                        row[metric] = self.metrics[metric][i]
+                if row:
+                    row["frame_no"] = i
+                    dict_writer.writerow(row)

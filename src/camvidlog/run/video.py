@@ -8,7 +8,7 @@ from camvidlog.procs.basics import (
     SharedMemoryQueueResources,
     peek_in_file,
 )
-from camvidlog.procs.source import BackgroundSubtractorMOG2, Rescaler, SaveToFile
+from camvidlog.procs.frame import BackgroundSubtractorMOG2, Rescaler, SaveToFile
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
