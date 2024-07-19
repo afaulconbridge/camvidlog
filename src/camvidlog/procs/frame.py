@@ -3,7 +3,7 @@ from multiprocessing import Queue
 import cv2
 import numpy as np
 
-from camvidlog.procs.basics import FrameConsumer, FrameConsumerProducer
+from camvidlog.procs.basics import Colourspace, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
 
 
 class SaveToFile(FrameConsumer):
@@ -11,8 +11,8 @@ class SaveToFile(FrameConsumer):
     fps: float
     out: cv2.VideoWriter | None
 
-    def __init__(self, filename: str, fps: float, queue: Queue, shape: tuple[int, int, int], dtype: np.dtype):
-        super().__init__(queue=queue, shape=shape, dtype=dtype)
+    def __init__(self, filename: str, fps: float, info_input: FrameQueueInfoOutput):
+        super().__init__(info_input)
         self.filename = filename
         self.fps = fps
         self.out = None
@@ -25,8 +25,8 @@ class SaveToFile(FrameConsumer):
                 cv2.VideoWriter_fourcc(*"XVID"),
                 # cv2.VideoWriter_fourcc(*"X264"), # .mp4
                 self.fps,
-                (self.shape[1], self.shape[0]),
-                isColor=(self.shape[2] == 3),  # noqa: PLR2004
+                (self.info_input.x, self.info_input.y),
+                isColor=self.info_input.colourspace != Colourspace.greyscale,
             )
         self.out.write(frame)
 
@@ -40,22 +40,19 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
 
     def __init__(
         self,
-        queue_in: Queue,
+        info_input: FrameQueueInfoOutput,
         queue_out: Queue,
         shared_memory_names_out: tuple[str, ...],
-        shape: tuple[int, int, int],
-        dtype: np.dtype,
         history: int = 500,
         var_threshold=16,
     ):
         super().__init__(
-            queue_in=queue_in,
+            info_input=info_input,
             queue_out=queue_out,
             shared_memory_names_out=shared_memory_names_out,
-            shape_in=shape,
-            shape_out=shape,
-            dtype_in=dtype,
-            dtype_out=dtype,
+            x=info_input.x,
+            y=info_input.y,
+            colourspace=info_input.colourspace,
         )
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=history, detectShadows=False, varThreshold=var_threshold
@@ -72,22 +69,19 @@ class BackgroundSubtractorKNN(FrameConsumerProducer):
 
     def __init__(
         self,
-        queue_in: Queue,
+        info_input: FrameQueueInfoOutput,
         queue_out: Queue,
         shared_memory_names_out: tuple[str, ...],
-        shape: tuple[int, int, int],
-        dtype: np.dtype,
         history: int = 500,
         dist2_threshold: float = 400.0,
     ):
         super().__init__(
-            queue_in=queue_in,
+            info_input=info_input,
             queue_out=queue_out,
             shared_memory_names_out=shared_memory_names_out,
-            shape_in=shape,
-            shape_out=shape,
-            dtype_in=dtype,
-            dtype_out=dtype,
+            x=info_input.x,
+            y=info_input.y,
+            colourspace=Colourspace.greyscale,
         )
         self.background_subtractor = cv2.createBackgroundSubtractorKNN(
             history=history, detectShadows=False, dist2Threshold=dist2_threshold
@@ -99,32 +93,65 @@ class BackgroundSubtractorKNN(FrameConsumerProducer):
         return True
 
 
+class BackgroundMaskDenoiser(FrameConsumerProducer):
+    kernel_size: int
+    frame_temp: None | np.ndarray = None
+
+    def __init__(
+        self,
+        info_input: FrameQueueInfoOutput,
+        queue_out: Queue,
+        shared_memory_names_out: tuple[str, ...],
+        kernel_size: int = 3,
+    ):
+        super().__init__(
+            info_input=info_input,
+            queue_out=queue_out,
+            shared_memory_names_out=shared_memory_names_out,
+            x=info_input.x,
+            y=info_input.y,
+            colourspace=info_input.colourspace,
+        )
+        self.kernel_size = kernel_size
+
+    def process_frame(self, frame_in, frame_out) -> bool:
+        # frigate uses bluring and thresholding
+        # opencv tutorial uses morphology kernels
+        kernel = np.ones((self.kernel_size, self.kernel_size), np.uint8)
+
+        # To avoid allocating intermediate frame each time!
+        if self.frame_temp is None:
+            self.frame_temp = cv2.morphologyEx(frame_in, cv2.MORPH_OPEN, kernel)
+        else:
+            cv2.morphologyEx(frame_in, cv2.MORPH_OPEN, kernel, self.frame_temp)
+        cv2.morphologyEx(self.frame_temp, cv2.MORPH_CLOSE, kernel, dst=frame_out)
+
+        return True
+
+
 class Rescaler(FrameConsumerProducer):
     res: tuple[int, int]
     fps_ratio: float
 
     def __init__(
         self,
-        queue_in: Queue,
+        info_input: FrameQueueInfoOutput,
         queue_out: Queue,
         shared_memory_names_out: tuple[str, ...],
-        shape_in: tuple[int, int, int],
-        shape_out: tuple[int, int, int],
-        dtype_in: np.dtype,
-        dtype_out: np.dtype,
+        x: int,
+        y: int,
         fps_in: int,
         fps_out: int,
     ):
         super().__init__(
-            queue_in=queue_in,
+            info_input=info_input,
             queue_out=queue_out,
             shared_memory_names_out=shared_memory_names_out,
-            shape_in=shape_in,
-            shape_out=shape_out,
-            dtype_in=dtype_in,
-            dtype_out=dtype_out,
+            x=x,
+            y=y,
+            colourspace=info_input.colourspace,
         )
-        self.res = (shape_out[1], shape_out[0])  # needs to be x,y but shape is y,x
+        self.res = (x, y)
         if fps_out > fps_in:
             msg = "fps_out cannot be greater than fps_in"
             raise ValueError(msg)

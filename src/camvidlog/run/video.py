@@ -2,13 +2,15 @@ import argparse
 import time
 from multiprocessing import Process
 
+import numpy as np
+
 from camvidlog.procs.basics import (
     FileReader,
     Resolution,
     SharedMemoryQueueResources,
     peek_in_file,
 )
-from camvidlog.procs.frame import BackgroundSubtractorMOG2, Rescaler, SaveToFile
+from camvidlog.procs.frame import BackgroundMaskDenoiser, BackgroundSubtractorMOG2, Rescaler, SaveToFile
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -23,46 +25,39 @@ if __name__ == "__main__":
         q1 = SharedMemoryQueueResources(vidstats.nbytes)
         q2 = SharedMemoryQueueResources(vidstats.nbytes)
         q3 = SharedMemoryQueueResources(vidstats.nbytes)
+        q4 = SharedMemoryQueueResources(vidstats.nbytes)
 
         file_reader = FileReader(
-            filename,
-            vidstats.fps,
-            q1.queue,
-            q1.shared_memory_names,
-            vidstats.shape,
-            vidstats.dtype,
+            filename, vidstats.fps, q1.queue, q1.shared_memory_names, vidstats.x, vidstats.y, vidstats.colourspace
         )
         rescaler = Rescaler(
-            q1.queue,
-            q2.queue,
-            q2.shared_memory_names,
-            vidstats.shape,
-            (*Resolution.SD.value, 3),
-            vidstats.dtype,
-            vidstats.dtype,
+            info_input=file_reader.info_output,
+            queue_out=q2.queue,
+            shared_memory_names_out=q2.shared_memory_names,
+            x=Resolution.SD.value[1],
+            y=Resolution.SD.value[0],
             fps_in=30,
             fps_out=5,
         )
         background_subtractor = BackgroundSubtractorMOG2(
-            q2.queue,
-            q3.queue,
-            q3.shared_memory_names,
-            (*Resolution.SD.value, 3),
-            vidstats.dtype,
+            info_input=rescaler.info_output,
+            queue_out=q3.queue,
+            shared_memory_names_out=q3.shared_memory_names,
+            history=5000,
         )
-        save_to_file = SaveToFile(
-            "output.avi",
-            5,
-            q3.queue,
-            (*Resolution.SD.value, 3),
-            vidstats.dtype,
+        background_mask_denoiser = BackgroundMaskDenoiser(
+            info_input=background_subtractor.info_output,
+            queue_out=q4.queue,
+            shared_memory_names_out=q4.shared_memory_names,
         )
+        save_to_file = SaveToFile("output.avi", 5, background_mask_denoiser.info_output)
 
-        with q1, q2, q3:
+        with q1, q2, q3, q4:
             ps = []
             ps.append(Process(target=file_reader))
             ps.append(Process(target=rescaler))
             ps.append(Process(target=background_subtractor))
+            ps.append(Process(target=background_mask_denoiser))
             ps.append(Process(target=save_to_file))
 
             starttime = time.time()

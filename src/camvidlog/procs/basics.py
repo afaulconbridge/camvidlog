@@ -1,9 +1,9 @@
+from collections.abc import Generator
 from csv import DictWriter
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
-from typing import Generator
 
 import cv2
 import numpy as np
@@ -19,20 +19,43 @@ class Resolution(Enum):
     UHD = (2160, 3840)  # 4K
 
 
+class Colourspace(Enum):
+    RGB = "rgb"
+    greyscale = "greyscale"
+
+
+@dataclass
+class FrameQueueInfoOutput:
+    queue: Queue
+    x: int
+    y: int
+    colourspace: Colourspace
+
+    @property
+    def shape(self) -> tuple[int, int, int]:
+        # Y,X to match openCV
+        return (self.y, self.x, 1 if self.colourspace == Colourspace.greyscale else 3)
+
+
 @dataclass
 class VideoFileStats:
     filename: str
     fps: float
     x: int
     y: int
-    bw: bool
-    nbytes: int
-    dtype: np.dtype
+    colourspace: Colourspace
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, int, int]:
         # Y,X to match openCV
-        return (self.y, self.x, 1 if self.bw else 3)
+        return (self.y, self.x, 1 if self.colourspace == Colourspace.greyscale else 3)
+
+    @property
+    def nbytes(self) -> int:
+        if self.colourspace == Colourspace.greyscale:
+            return self.x * self.y
+        else:
+            return self.x * self.y * 3
 
 
 def peek_in_file(filename: str) -> VideoFileStats:
@@ -50,8 +73,8 @@ def peek_in_file(filename: str) -> VideoFileStats:
             raise RuntimeError(msg)
         y = frame.shape[0]
         x = frame.shape[1]
-        bw = frame.shape[2] == 1
-        return VideoFileStats(filename=filename, fps=fps, x=x, y=y, bw=bw, nbytes=frame.nbytes, dtype=frame.dtype)
+        colourspace = Colourspace.greyscale if frame.shape[2] == 1 else Colourspace.RGB
+        return VideoFileStats(filename=filename, fps=fps, x=x, y=y, colourspace=colourspace)
     finally:
         if video_capture:
             video_capture.release()
@@ -61,12 +84,9 @@ def peek_in_file(filename: str) -> VideoFileStats:
 class FileReader:
     videopath: str
     shared_memory_names: tuple[str, ...]
-    shared_memory: tuple[SharedMemory, ...]
-    shared_arrays: tuple[np.ndarray]
-    shared_pointer: int
     fps: float
-    queue: Queue
-    video_capture: cv2.VideoCapture | None
+
+    info_output: FrameQueueInfoOutput
 
     def __init__(
         self,
@@ -74,101 +94,94 @@ class FileReader:
         fps: float,
         queue: Queue,
         shared_memory_names: tuple[str, ...],
-        shape: tuple[int, int, int],
-        dtype: np.dtype,
+        x: int,
+        y: int,
+        colourspace: Colourspace,
     ):
         self.videopath = videopath
         self.fps = fps
-        self.queue = queue
         self.shared_memory_names = shared_memory_names
-        self.shape = shape
-        self.dtype = dtype
 
-        self.shared_pointer = 0
+        self.info_output = FrameQueueInfoOutput(queue, x, y, colourspace)
+
+    @property
+    def _shape(self):
+        shape = (self.info_output.y, self.info_output.x)
+        shape = (*shape, 3) if self.info_output.colourspace == Colourspace.RGB else shape
+        return shape
 
     def __call__(
         self,
     ):
-        with self:
+        video_capture = None
+        shared_memory = ()
+        try:
+            video_capture = cv2.VideoCapture(self.videopath, cv2.CAP_ANY)
+            shared_memory = tuple(SharedMemory(name, False) for name in self.shared_memory_names)
+            shared_arrays = tuple(
+                np.ndarray(self._shape, dtype=np.uint8, buffer=shared_memory.buf) for shared_memory in shared_memory
+            )
+            shared_pointer = 0
+
             frame_no = 0
             frame_time = 0.0
             while True:
-                (success, frame) = self.video_capture.read(self.shared_arrays[self.shared_pointer])
+                (success, _) = video_capture.read(shared_arrays[shared_pointer])
                 if not success:
                     break
 
-                self.queue.put(
-                    (self.shared_memory_names[self.shared_pointer], frame_no, frame_time),
+                self.info_output.queue.put(
+                    (self.shared_memory_names[shared_pointer], frame_no, frame_time),
                     timeout=TIMEOUT,
                 )
 
                 frame_no += 1
                 frame_time = frame_no / self.fps
 
-                if self.shared_pointer == 0:
-                    self.shared_pointer = len(self.shared_memory_names) - 1
+                if shared_pointer == 0:
+                    shared_pointer = len(self.shared_memory_names) - 1
                 else:
-                    self.shared_pointer -= 1
+                    shared_pointer -= 1
+        finally:
+            if video_capture:
+                video_capture.release()
 
-    def __enter__(self) -> None:
-        self.video_capture = cv2.VideoCapture(self.videopath, cv2.CAP_ANY)
+            for mem in shared_memory:
+                mem.close()
 
-        self.shared_memory = tuple(SharedMemory(name, False) for name in self.shared_memory_names)
-        self.shared_arrays = tuple(
-            np.ndarray(self.shape, dtype=self.dtype, buffer=shared_memory.buf) for shared_memory in self.shared_memory
-        )
-
-    def __exit__(self, _type, value, traceback) -> None:
-        self.video_capture.release()
-
-        for mem in self.shared_memory:
-            mem.close()
-        self.shared_memory = ()
-        self.shared_arrays = ()
-
-        # sent end sentinel
-        self.queue.put(None, timeout=TIMEOUT)
+            # sent end sentinel
+            self.info_output.queue.put(None, timeout=TIMEOUT)
 
 
 class FrameConsumer:
-    queue: Queue
-    shape: tuple[int, int, int]
-    dtype: np.dtype
-    shared_memory: dict[str, SharedMemory]
-    shared_array: dict[str, np.ndarray]
+    info_input: FrameQueueInfoOutput
     frame_no: int | None
 
-    def __init__(
-        self,
-        queue: Queue,
-        shape: tuple[int, int, int],
-        dtype: np.dtype,
-    ):
-        self.queue = queue
-        self.shape = shape
-        self.dtype = dtype
-        self.shared_memory = {}
-        self.shared_array = {}
+    def __init__(self, info_input: FrameQueueInfoOutput):
+        self.info_input = info_input
+        print(f"{self} {info_input}")
 
     def __call__(self):
         try:
             self.setup()
+            shared_memory: dict[str, SharedMemory] = {}
+            shared_array: dict[str, np.ndarray] = {}
 
-            while item := self.queue.get(timeout=TIMEOUT):
+            while item := self.info_input.queue.get(timeout=TIMEOUT):
                 shared_memory_name, frame_no, frame_time = item
                 self.frame_no = frame_no
 
-                if shared_memory_name not in self.shared_memory:
-                    self.shared_memory[shared_memory_name] = SharedMemory(name=shared_memory_name, create=False)
-                    self.shared_array[shared_memory_name] = np.ndarray(
-                        self.shape, dtype=self.dtype, buffer=self.shared_memory[shared_memory_name].buf
+                if shared_memory_name not in shared_memory:
+                    shared_memory[shared_memory_name] = SharedMemory(name=shared_memory_name, create=False)
+                    shared_array[shared_memory_name] = np.ndarray(
+                        self.info_input.shape, dtype=np.uint8, buffer=shared_memory[shared_memory_name].buf
                     )
-                self.process_frame(self.shared_array[shared_memory_name])
+                self.process_frame(shared_array[shared_memory_name])
         finally:
             self.cleanup()
-            self.queue.close()
+            self.info_input.queue.close()
 
-            for shared_memory_item in self.shared_memory.values():
+            for shared_memory_item in shared_memory.values():
                 shared_memory_item.close()
 
     def setup(self) -> None:
@@ -178,96 +191,90 @@ class FrameConsumer:
         pass
 
     def cleanup(self) -> None:
-        for mem in self.shared_memory.values():
-            mem.close()
+        pass
 
 
 class FrameConsumerProducer:
-    queue_in: Queue
-    queue_out: Queue
-    shape_in: tuple[int, int, int]
-    shape_out: tuple[int, int, int]
-    dtype_int: np.dtype
-    dtype_out: np.dtype
-    shared_memory_in = dict[str, SharedMemory]
-    shared_array_in = dict[str, np.ndarray]
     shared_memory_names_out: tuple[str, ...]
-    shared_memory_out: tuple[SharedMemory, ...]
-    shared_array_out: tuple[np.ndarray]
-    shared_pointer: int
     frame_no: int | None
+
+    info_input: FrameQueueInfoOutput
 
     def __init__(
         self,
-        queue_in: Queue,
+        info_input: FrameQueueInfoOutput,
         queue_out: Queue,
         shared_memory_names_out: tuple[str, ...],
-        shape_in: tuple[int, int, int],
-        shape_out: tuple[int, int, int],
-        dtype_in: np.dtype,
-        dtype_out: np.dtype,
+        x: int,
+        y: int,
+        colourspace: Colourspace,
     ):
-        self.queue_in = queue_in
-        self.queue_out = queue_out
+        self.info_input = info_input
+        self.info_output = FrameQueueInfoOutput(queue_out, x, y, colourspace)
         self.shared_memory_names_out = shared_memory_names_out
-        self.shape_in = shape_in
-        self.shape_out = shape_out
-        self.dtype_in = dtype_in
-        self.dtype_out = dtype_out
-        self.shared_memory_in = {}
-        self.shared_array_in = {}
-        self.shared_pointer = 0
+        print(f"{self} {self.info_input} {self.info_output}")
 
     def __call__(self):
-        with self:
-            while item := self.queue_in.get(timeout=TIMEOUT):
+        try:
+            self.setup()
+            shared_pointer = 0
+            shared_memory_in: dict[str, SharedMemory] = {}
+            shared_array_in: dict[str, np.ndarray] = {}
+
+            shared_memory_out: tuple[SharedMemory, ...] = tuple(
+                SharedMemory(name, False) for name in self.shared_memory_names_out
+            )
+            shared_array_out: tuple[np.ndarray, ...] = tuple(
+                np.ndarray(self.info_output.shape, dtype=np.uint8, buffer=shared_memory.buf)
+                for shared_memory in shared_memory_out
+            )
+
+            while item := self.info_input.queue.get(timeout=TIMEOUT):
                 shared_memory_name_in, frame_no, frame_time = item
                 self.frame_no = frame_no
 
-                if shared_memory_name_in not in self.shared_memory_in:
-                    self.shared_memory_in[shared_memory_name_in] = SharedMemory(
-                        name=shared_memory_name_in, create=False
-                    )
-                    self.shared_array_in[shared_memory_name_in] = np.ndarray(
-                        self.shape_in, dtype=self.dtype_in, buffer=self.shared_memory_in[shared_memory_name_in].buf
+                if shared_memory_name_in not in shared_memory_in:
+                    shared_memory_in[shared_memory_name_in] = SharedMemory(name=shared_memory_name_in, create=False)
+                    shared_array_in[shared_memory_name_in] = np.ndarray(
+                        self.info_input.shape, dtype=np.uint8, buffer=shared_memory_in[shared_memory_name_in].buf
                     )
 
                 has_output = self.process_frame(
-                    self.shared_array_in[shared_memory_name_in],
-                    self.shared_array_out[self.shared_pointer],
+                    shared_array_in[shared_memory_name_in],
+                    shared_array_out[shared_pointer],
                 )
 
                 if has_output:
-                    self.queue_out.put(
-                        (self.shared_memory_names_out[self.shared_pointer], frame_no, frame_time),
+                    self.info_output.queue.put(
+                        (self.shared_memory_names_out[shared_pointer], frame_no, frame_time),
                         timeout=TIMEOUT,
                     )
 
-                    if self.shared_pointer == 0:
-                        self.shared_pointer = len(self.shared_memory_names_out) - 1
+                    if shared_pointer == 0:
+                        shared_pointer = len(self.shared_memory_names_out) - 1
                     else:
-                        self.shared_pointer -= 1
+                        shared_pointer -= 1
+        finally:
+            self.cleanup()
 
-    def __enter__(self) -> None:
-        self.shared_memory_out = tuple(SharedMemory(name, False) for name in self.shared_memory_names_out)
-        self.shared_array_out = tuple(
-            np.ndarray(self.shape_out, dtype=self.dtype_out, buffer=shared_memory.buf)
-            for shared_memory in self.shared_memory_out
-        )
+            for mem in shared_memory_in.values():
+                mem.close()
+            for mem in shared_memory_out:
+                mem.close()
 
-    def __exit__(self, _type, value, traceback) -> None:
-        for mem in self.shared_memory_in.values():
-            mem.close()
-        self.shared_memory_in = ()
-        self.shared_arrays_in = ()
+            self.info_input.queue.close()
+            # sent end sentinel
+            self.info_output.queue.put(None, timeout=TIMEOUT)
 
-        self.queue_in.close()
-        # sent end sentinel
-        self.queue_out.put(None, timeout=TIMEOUT)
+    def setup(self) -> None:
+        pass
 
     def process_frame(self, frame_in: np.ndarray, frame_out: np.ndarray) -> bool:
-        frame_out[:] = frame_in[:]
+        np.copyto(frame_out, frame_in)
         return True
+
+    def cleanup(self) -> None:
+        pass
 
 
 class SharedMemoryQueueResources:
@@ -341,7 +348,7 @@ class DataRecorder:
                 self.metrics[metric][frame_no] = value
 
         with open(self.outfilename, "w") as outfile:
-            dict_writer = DictWriter(outfile, ("frame_no",) + tuple(self.metrics.keys()))
+            dict_writer = DictWriter(outfile, ("frame_no", *tuple(self.metrics.keys())))
             dict_writer.writeheader()
             for i in range(frame_max):
                 row = {}

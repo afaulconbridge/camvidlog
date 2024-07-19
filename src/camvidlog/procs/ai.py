@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor, GroundingDinoProcessor
 
-from camvidlog.procs.basics import FrameConsumer
+from camvidlog.procs.basics import FrameConsumer, FrameQueueInfoOutput
 
 
 class GroundingDino(FrameConsumer):
@@ -16,9 +16,7 @@ class GroundingDino(FrameConsumer):
 
     def __init__(
         self,
-        queue: Queue,
-        shape: tuple[int, int, int],
-        dtype: np.dtype,
+        info_input: FrameQueueInfoOutput,
         queries: tuple[str, ...],
         queue_results: Queue,
         model_id: str,
@@ -26,9 +24,7 @@ class GroundingDino(FrameConsumer):
         text_threshold=0.25,
     ):
         super().__init__(
-            queue=queue,
-            shape=shape,
-            dtype=dtype,
+            info_input=info_input,
         )
         self.queue_results = queue_results
         # will only accept a single string
@@ -55,7 +51,7 @@ class GroundingDino(FrameConsumer):
             target_sizes=[image_pillow.size[::-1]],
         )[0]
         # score, label, bbox
-        hits = tuple(zip(*results.values()))
+        hits = tuple(zip(*results.values(), strict=False))
         #        for i, hit in enumerate(hits):
         #            score, label, bbox = hit
         #            print((i, float(score), str(label)))
