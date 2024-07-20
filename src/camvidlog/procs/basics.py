@@ -301,23 +301,6 @@ class SharedMemoryQueueResources:
             mem.unlink()
 
 
-def generate_from_queue_source(queue: Queue, timeout: float | None = None) -> Generator[SharedMemory, None, None]:
-    memory_map = {}
-    try:
-        while item := queue.get(timeout=timeout):
-            name = item[0]
-            if shared_memory := memory_map[name]:
-                pass
-            else:
-                shared_memory = SharedMemory(name, create=False)
-                memory_map[name] = shared_memory
-
-            yield shared_memory, *item[1:]
-    finally:
-        for shared_memory in memory_map.values():
-            shared_memory.close()
-
-
 class DataRecorder:
     queue: Queue
     sentinels_max: int
