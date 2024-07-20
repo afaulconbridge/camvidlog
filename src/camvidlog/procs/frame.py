@@ -52,15 +52,14 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
             shared_memory_names_out=shared_memory_names_out,
             x=info_input.x,
             y=info_input.y,
-            colourspace=info_input.colourspace,
+            colourspace=Colourspace.greyscale,
         )
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=history, detectShadows=False, varThreshold=var_threshold
         )
 
     def process_frame(self, frame_in, frame_out) -> bool:
-        fgmask = self.background_subtractor.apply(frame_in)
-        cv2.cvtColor(fgmask, cv2.COLOR_GRAY2RGB, frame_out)
+        self.background_subtractor.apply(frame_in, frame_out)
         return True
 
 
@@ -88,8 +87,7 @@ class BackgroundSubtractorKNN(FrameConsumerProducer):
         )
 
     def process_frame(self, frame_in, frame_out) -> bool:
-        fgmask = self.background_subtractor.apply(frame_in)
-        cv2.cvtColor(fgmask, cv2.COLOR_GRAY2RGB, frame_out)
+        self.background_subtractor.apply(frame_in, frame_out)
         return True
 
 
