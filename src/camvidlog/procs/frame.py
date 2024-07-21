@@ -127,6 +127,41 @@ class BackgroundMaskDenoiser(FrameConsumerProducer):
         return True
 
 
+class MaskStats(FrameConsumer):
+    queue_results: Queue
+
+    def __init__(
+        self,
+        info_input: FrameQueueInfoOutput,
+        queue_results: Queue,
+    ):
+        super().__init__(info_input)
+        self.queue_results = queue_results
+
+    def process_frame(self, frame_in: np.ndarray) -> None:
+        mean = frame_in.mean()
+        self.queue_results.put((self.frame_no, "mask.mean", float(mean)))
+
+        # TODO avoid allocation
+        contours, _ = cv2.findContours(frame_in, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for i, contour in enumerate(contours):
+            area = cv2.contourArea(contour)
+            area_proportion = area / self.info_input.area
+            self.queue_results.put((self.frame_no, f"mask.{i}.area", area_proportion))
+
+            contour_bbox = cv2.boundingRect(contour)
+            x, y, w, h = contour_bbox
+            x_prop = x / self.info_input.x
+            y_prop = y / self.info_input.y
+            ratio = h / w
+            self.queue_results.put((self.frame_no, f"mask.{i}.x", x_prop))
+            self.queue_results.put((self.frame_no, f"mask.{i}.y", y_prop))
+            self.queue_results.put((self.frame_no, f"mask.{i}.ratio", ratio))
+
+            # TODO identify contours frame-to-frame for comparable stats
+            break
+
+
 class Rescaler(FrameConsumerProducer):
     res: tuple[int, int]
     fps_ratio: float

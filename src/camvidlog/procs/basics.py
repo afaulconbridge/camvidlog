@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
+from typing import Self
 
 import cv2
 import numpy as np
@@ -35,6 +36,10 @@ class FrameQueueInfoOutput:
     def shape(self) -> tuple[int, int, int]:
         # Y,X to match openCV
         return (self.y, self.x, 1 if self.colourspace == Colourspace.greyscale else 3)
+
+    @property
+    def area(self) -> int:
+        return self.x * self.y
 
 
 @dataclass
@@ -103,6 +108,11 @@ class FileReader:
         self.shared_memory_names = shared_memory_names
 
         self.info_output = FrameQueueInfoOutput(queue, x, y, colourspace)
+
+    @classmethod
+    def from_file(cls, filename: str, queue: Queue, shared_memory_names: tuple[str, ...]) -> Self:
+        vidstats = peek_in_file(filename)
+        return cls(filename, vidstats.fps, queue, shared_memory_names, vidstats.x, vidstats.y, vidstats.colourspace)
 
     @property
     def _shape(self):
