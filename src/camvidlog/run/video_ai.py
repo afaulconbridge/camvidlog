@@ -12,6 +12,7 @@ from camvidlog.procs.basics import (
     peek_in_file,
 )
 from camvidlog.procs.frame import Rescaler
+from camvidlog.procs.queues import SharedMemoryQueueManager
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -24,13 +25,12 @@ if __name__ == "__main__":
 
         # need to assign shared memory from the parent process
         # otherwise it will be eagerly cleaned up when the child terminates
-        q1 = SharedMemoryQueueResources(vidstats.nbytes)
+        q_manager = SharedMemoryQueueManager()
+
         q2 = SharedMemoryQueueResources(vidstats.nbytes)
         q_results = Queue()
 
-        file_reader = FileReader(
-            filename, vidstats.fps, q1.queue, q1.shared_memory_names, vidstats.x, vidstats.y, vidstats.colourspace
-        )
+        file_reader = FileReader(q_manager, filename)
         rescaler = Rescaler(
             info_input=file_reader.info_output,
             queue_out=q2.queue,
@@ -50,7 +50,7 @@ if __name__ == "__main__":
         )
         data_recorder = DataRecorder(q_results, 1, filename.replace(".MP4", ".csv"))
 
-        with q1, q2:
+        with q2:
             ps = []
             ps.append(Process(target=file_reader))
             ps.append(Process(target=rescaler))

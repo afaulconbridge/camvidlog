@@ -9,6 +9,8 @@ from typing import Self
 import cv2
 import numpy as np
 
+from camvidlog.procs.queues import SharedMemoryQueueManager, SharedMemoryQueueResources
+
 TIMEOUT = 180.0
 
 
@@ -86,28 +88,92 @@ def peek_in_file(filename: str) -> VideoFileStats:
             video_capture = None
 
 
-class FileReader:
-    videopath: str
-    shared_memory_names: tuple[str, ...]
-    fps: float
-
+class FrameProducer:
+    queue_resources: SharedMemoryQueueResources
     info_output: FrameQueueInfoOutput
+
+    def __init__(self, queue_manager: SharedMemoryQueueManager):
+        nbytes = self._get_nbytes()
+        self.queue_resources = queue_manager.make_queue(nbytes)
+        x, y = self._get_x_y()
+        colourspace = self._get_colourspace()
+        self.info_output = FrameQueueInfoOutput(self.queue_resources.queue, x, y, colourspace)
+
+    def _get_nbytes(self) -> int:
+        raise NotImplementedError
+
+    def _get_x_y(self) -> tuple[int, int]:
+        raise NotImplementedError
+
+    def _get_colourspace(self) -> Colourspace:
+        raise NotImplementedError
+
+    def _get_shape(self) -> tuple[int, int, int]:
+        # Y,X to match openCV
+        x, y = self._get_x_y()
+        return (y, x, 1 if self._get_colourspace() == Colourspace.greyscale else 3)
+
+    def setup(self) -> None:
+        pass
+
+    def close(self) -> None:
+        # sent end sentinel
+        self.info_output.queue.put(None, timeout=TIMEOUT)
+
+    def generate_frame_into(self, array: np.ndarray) -> tuple[bool, int | None, float | None]:
+        raise NotImplementedError
+
+    def __call__(
+        self,
+    ):
+        try:
+            # setup locals to avoid accidental pickle
+            shared_memory = ()
+            shared_memory = tuple(SharedMemory(name, False) for name in self.queue_resources.shared_memory_names)
+            shared_arrays = tuple(
+                np.ndarray(self._get_shape(), dtype=np.uint8, buffer=shared_memory.buf)
+                for shared_memory in shared_memory
+            )
+            shared_pointer = 0
+
+            self.setup()
+
+            while True:
+                success, frame_no, frame_time = self.generate_frame_into(shared_arrays[shared_pointer])
+                if not success:
+                    break
+
+                self.info_output.queue.put(
+                    (self.queue_resources.shared_memory_names[shared_pointer], frame_no, frame_time),
+                    timeout=TIMEOUT,
+                )
+
+                if shared_pointer == 0:
+                    shared_pointer = len(self.queue_resources.shared_memory_names) - 1
+                else:
+                    shared_pointer -= 1
+        finally:
+            for mem in shared_memory:
+                mem.close()
+
+            self.close()
+
+
+class FileReader(FrameProducer):
+    filename: str
+    _video_file_stats: VideoFileStats | None = None
+    info_output: FrameQueueInfoOutput
+    video_capture: cv2.VideoCapture | None = None
+    frame_no: int = 0
+    frame_time: float = 0.0
 
     def __init__(
         self,
-        videopath: str,
-        fps: float,
-        queue: Queue,
-        shared_memory_names: tuple[str, ...],
-        x: int,
-        y: int,
-        colourspace: Colourspace,
+        queue_manager: SharedMemoryQueueManager,
+        filename: str,
     ):
-        self.videopath = videopath
-        self.fps = fps
-        self.shared_memory_names = shared_memory_names
-
-        self.info_output = FrameQueueInfoOutput(queue, x, y, colourspace)
+        self.filename = filename
+        super().__init__(queue_manager)
 
     @classmethod
     def from_file(cls, filename: str, queue: Queue, shared_memory_names: tuple[str, ...]) -> Self:
@@ -120,47 +186,38 @@ class FileReader:
         shape = (*shape, 3) if self.info_output.colourspace == Colourspace.RGB else shape
         return shape
 
-    def __call__(
-        self,
-    ):
-        video_capture = None
-        shared_memory = ()
-        try:
-            video_capture = cv2.VideoCapture(self.videopath, cv2.CAP_ANY)
-            shared_memory = tuple(SharedMemory(name, False) for name in self.shared_memory_names)
-            shared_arrays = tuple(
-                np.ndarray(self._shape, dtype=np.uint8, buffer=shared_memory.buf) for shared_memory in shared_memory
-            )
-            shared_pointer = 0
+    @property
+    def video_file_stats(self):
+        if self._video_file_stats is None:
+            self._video_file_stats = peek_in_file(self.filename)
+        return self._video_file_stats
 
-            frame_no = 0
-            frame_time = 0.0
-            while True:
-                (success, _) = video_capture.read(shared_arrays[shared_pointer])
-                if not success:
-                    break
+    def _get_nbytes(self) -> int:
+        return self.video_file_stats.nbytes
 
-                self.info_output.queue.put(
-                    (self.shared_memory_names[shared_pointer], frame_no, frame_time),
-                    timeout=TIMEOUT,
-                )
+    def _get_x_y(self) -> tuple[int, int]:
+        return self.video_file_stats.x, self.video_file_stats.y
 
-                frame_no += 1
-                frame_time = frame_no / self.fps
+    def _get_colourspace(self) -> Colourspace:
+        return self.video_file_stats.colourspace
 
-                if shared_pointer == 0:
-                    shared_pointer = len(self.shared_memory_names) - 1
-                else:
-                    shared_pointer -= 1
-        finally:
-            if video_capture:
-                video_capture.release()
+    def setup(self) -> None:
+        super().setup()
+        self.video_capture = cv2.VideoCapture(self.filename, cv2.CAP_ANY)
 
-            for mem in shared_memory:
-                mem.close()
+    def close(self) -> None:
+        super().close()
+        if self.video_capture is not None:
+            self.video_capture.release()
 
-            # sent end sentinel
-            self.info_output.queue.put(None, timeout=TIMEOUT)
+    def generate_frame_into(self, array: np.ndarray) -> tuple[bool, int | None, float | None]:
+        (success, _) = self.video_capture.read(array)
+        if not success:
+            return False, None, None
+        else:
+            self.frame_no += 1
+            self.frame_time = self.frame_no / self.video_file_stats.fps
+            return True, self.frame_no, self.frame_time
 
 
 class FrameConsumer:
@@ -169,7 +226,6 @@ class FrameConsumer:
 
     def __init__(self, info_input: FrameQueueInfoOutput):
         self.info_input = info_input
-        print(f"{self} {info_input}")
 
     def __call__(self):
         try:
@@ -285,30 +341,6 @@ class FrameConsumerProducer:
 
     def cleanup(self) -> None:
         pass
-
-
-class SharedMemoryQueueResources:
-    queue: Queue
-    _shared_memory: tuple[SharedMemory, ...]
-
-    def __init__(self, nbytes: int, size: int = 2):
-        if size < 2:  # noqa: PLR2004
-            msg = "size < 2"
-            raise ValueError(msg)
-        self.queue = Queue(size - 1)
-        self._shared_memory = tuple(SharedMemory(create=True, size=nbytes) for _ in range(size))
-        self.shared_memory_names = tuple(m.name for m in self._shared_memory)
-
-    def __enter__(self) -> None:
-        pass
-
-    def __exit__(self, _type, value, traceback) -> None:
-        self.close()
-
-    def close(self) -> None:
-        for mem in self._shared_memory:
-            mem.close()
-            mem.unlink()
 
 
 class DataRecorder:
