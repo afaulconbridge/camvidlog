@@ -1,5 +1,8 @@
+import logging
 from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
+
+logger = logging.getLogger(__name__)
 
 
 class SharedMemoryQueueResources:
@@ -12,8 +15,9 @@ class SharedMemoryQueueResources:
             raise ValueError(msg)
         self.queue = Queue(size - 1)
         shared_memory = tuple(SharedMemory(create=True, size=nbytes) for _ in range(size))
-        self.shared_memory_names = tuple(m.name for m in shared_memory)
+        self.shared_memory_names = tuple(str(m.name) for m in shared_memory)
         for mem in shared_memory:
+            logger.debug(f"Using shared memory '{mem.name}' for {self.queue}")
             mem.close()
 
     def __enter__(self) -> None:

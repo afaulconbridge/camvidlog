@@ -1,4 +1,4 @@
-from collections.abc import Generator
+import time
 from csv import DictWriter
 from dataclasses import dataclass
 from enum import Enum
@@ -42,6 +42,12 @@ class FrameQueueInfoOutput:
     @property
     def area(self) -> int:
         return self.x * self.y
+
+    @property
+    def nbytes(self) -> int:
+        return (
+            self.x * self.y * (1 if self.colourspace == Colourspace.greyscale else 3) * (np.iinfo(np.uint8).bits // 8)
+        )
 
 
 @dataclass
@@ -92,7 +98,8 @@ class FrameProducer:
     queue_resources: SharedMemoryQueueResources
     info_output: FrameQueueInfoOutput
 
-    def __init__(self, queue_manager: SharedMemoryQueueManager):
+    def __init__(self, *, queue_manager: SharedMemoryQueueManager, **kwargs):
+        super().__init__(**kwargs)
         nbytes = self._get_nbytes()
         self.queue_resources = queue_manager.make_queue(nbytes)
         x, y = self._get_x_y()
@@ -153,10 +160,9 @@ class FrameProducer:
                 else:
                     shared_pointer -= 1
         finally:
+            self.close()
             for mem in shared_memory:
                 mem.close()
-
-            self.close()
 
 
 class FileReader(FrameProducer):
@@ -167,13 +173,9 @@ class FileReader(FrameProducer):
     frame_no: int = 0
     frame_time: float = 0.0
 
-    def __init__(
-        self,
-        queue_manager: SharedMemoryQueueManager,
-        filename: str,
-    ):
+    def __init__(self, *, filename: str, **kwargs):
         self.filename = filename
-        super().__init__(queue_manager)
+        super().__init__(**kwargs)
 
     @classmethod
     def from_file(cls, filename: str, queue: Queue, shared_memory_names: tuple[str, ...]) -> Self:
@@ -224,8 +226,9 @@ class FrameConsumer:
     info_input: FrameQueueInfoOutput
     frame_no: int | None
 
-    def __init__(self, info_input: FrameQueueInfoOutput):
+    def __init__(self, *, info_input: FrameQueueInfoOutput, **kwargs):
         self.info_input = info_input
+        super().__init__(**kwargs)
 
     def __call__(self):
         try:
@@ -244,8 +247,7 @@ class FrameConsumer:
                     )
                 self.process_frame(shared_array[shared_memory_name])
         finally:
-            self.cleanup()
-            self.info_input.queue.close()
+            self.close()
 
             for shared_memory_item in shared_memory.values():
                 shared_memory_item.close()
@@ -256,31 +258,27 @@ class FrameConsumer:
     def process_frame(self, frame) -> None:
         pass
 
-    def cleanup(self) -> None:
-        pass
+    def close(self) -> None:
+        self.info_input.queue.close()
 
 
-class FrameConsumerProducer:
-    shared_memory_names_out: tuple[str, ...]
-    frame_no: int | None
+class FrameConsumerProducer(FrameConsumer, FrameProducer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    info_input: FrameQueueInfoOutput
+    def _get_nbytes(self) -> int:
+        return self.info_input.nbytes
 
-    def __init__(
-        self,
-        info_input: FrameQueueInfoOutput,
-        queue_out: Queue,
-        shared_memory_names_out: tuple[str, ...],
-        x: int,
-        y: int,
-        colourspace: Colourspace,
-    ):
-        self.info_input = info_input
-        self.info_output = FrameQueueInfoOutput(queue_out, x, y, colourspace)
-        self.shared_memory_names_out = shared_memory_names_out
-        print(f"{self} {self.info_input} {self.info_output}")
+    def _get_x_y(self) -> tuple[int, int]:
+        return (self.info_input.x, self.info_input.y)
+
+    def _get_colourspace(self) -> Colourspace:
+        return self.info_input.colourspace
 
     def __call__(self):
+        # optimize avoid object dereferencing
+        queue_out = self.info_output.queue
+        shared_memory_names = self.queue_resources.shared_memory_names
         try:
             self.setup()
             shared_pointer = 0
@@ -288,7 +286,7 @@ class FrameConsumerProducer:
             shared_array_in: dict[str, np.ndarray] = {}
 
             shared_memory_out: tuple[SharedMemory, ...] = tuple(
-                SharedMemory(name, False) for name in self.shared_memory_names_out
+                SharedMemory(name, False) for name in shared_memory_names
             )
             shared_array_out: tuple[np.ndarray, ...] = tuple(
                 np.ndarray(self.info_output.shape, dtype=np.uint8, buffer=shared_memory.buf)
@@ -311,17 +309,17 @@ class FrameConsumerProducer:
                 )
 
                 if has_output:
-                    self.info_output.queue.put(
-                        (self.shared_memory_names_out[shared_pointer], frame_no, frame_time),
+                    queue_out.put(
+                        (shared_memory_names[shared_pointer], frame_no, frame_time),
                         timeout=TIMEOUT,
                     )
 
                     if shared_pointer == 0:
-                        shared_pointer = len(self.shared_memory_names_out) - 1
+                        shared_pointer = len(shared_memory_names) - 1
                     else:
                         shared_pointer -= 1
         finally:
-            self.cleanup()
+            self.close()
 
             for mem in shared_memory_in.values():
                 mem.close()
@@ -332,15 +330,11 @@ class FrameConsumerProducer:
             # sent end sentinel
             self.info_output.queue.put(None, timeout=TIMEOUT)
 
-    def setup(self) -> None:
-        pass
-
     def process_frame(self, frame_in: np.ndarray, frame_out: np.ndarray) -> bool:
-        np.copyto(frame_out, frame_in)
+        before = time.time()
+        # np.copyto(frame_out, frame_in)
+        after = time.time()
         return True
-
-    def cleanup(self) -> None:
-        pass
 
 
 class DataRecorder:

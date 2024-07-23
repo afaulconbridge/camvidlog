@@ -1,7 +1,6 @@
 from multiprocessing import Queue
 from typing import Any
 
-import numpy as np
 from PIL import Image
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor, GroundingDinoProcessor
 
@@ -63,7 +62,7 @@ class GroundingDino(FrameConsumer):
             # yield float(score), str(label), [int(i) for i in bbox]
         return True
 
-    def cleanup(self) -> None:
-        super().cleanup()
+    def close(self) -> None:
+        super().close()
 
         self.queue_results.put(None)

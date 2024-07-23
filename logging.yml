@@ -10,9 +10,7 @@ handlers:
     stream: ext://sys.stdout
 loggers:
   camvidlog:
-    level: INFO
-  sqlalchemy:
-    level: WARNING
+    level: DEBUG
 root:
   handlers: ["console"]
   level: WARNING

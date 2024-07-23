@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from camvidlog.procs.basics import Colourspace, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.procs.queues import SharedMemoryQueueManager
 
 
 class SaveToFile(FrameConsumer):
@@ -12,7 +13,7 @@ class SaveToFile(FrameConsumer):
     out: cv2.VideoWriter | None
 
     def __init__(self, filename: str, fps: float, info_input: FrameQueueInfoOutput):
-        super().__init__(info_input)
+        super().__init__(info_input=info_input)
         self.filename = filename
         self.fps = fps
         self.out = None
@@ -30,64 +31,64 @@ class SaveToFile(FrameConsumer):
             )
         self.out.write(frame)
 
-    def cleanup(self) -> None:
+    def close(self) -> None:
         if self.out:
             self.out.release()
 
 
 class BackgroundSubtractorMOG2(FrameConsumerProducer):
-    background_subtractor: cv2.BackgroundSubtractorMOG2
+    _background_subtractor: cv2.BackgroundSubtractorMOG2 | None = None
+    history: int
+    var_threshold: int
 
     def __init__(
         self,
         info_input: FrameQueueInfoOutput,
-        queue_out: Queue,
-        shared_memory_names_out: tuple[str, ...],
+        queue_manager: SharedMemoryQueueManager,
         history: int = 500,
         var_threshold=16,
     ):
-        super().__init__(
-            info_input=info_input,
-            queue_out=queue_out,
-            shared_memory_names_out=shared_memory_names_out,
-            x=info_input.x,
-            y=info_input.y,
-            colourspace=Colourspace.greyscale,
-        )
-        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=history, detectShadows=False, varThreshold=var_threshold
-        )
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
+        self.history = history
+        self.var_threshold = var_threshold
+
+        # always outputs greyscale
+        self.info_output.colourspace = Colourspace.greyscale
 
     def process_frame(self, frame_in, frame_out) -> bool:
-        self.background_subtractor.apply(frame_in, frame_out)
+        if self._background_subtractor is None:
+            self._background_subtractor = cv2.createBackgroundSubtractorMOG2(
+                history=self.history, detectShadows=False, varThreshold=self.var_threshold
+            )
+        self._background_subtractor.apply(frame_in, frame_out)
         return True
 
 
 class BackgroundSubtractorKNN(FrameConsumerProducer):
-    background_subtractor: cv2.BackgroundSubtractorKNN
+    _background_subtractor: cv2.BackgroundSubtractorKNN | None = None
+    history: int
+    dist2_threshold: float
 
     def __init__(
         self,
         info_input: FrameQueueInfoOutput,
-        queue_out: Queue,
-        shared_memory_names_out: tuple[str, ...],
+        queue_manager: SharedMemoryQueueManager,
         history: int = 500,
         dist2_threshold: float = 400.0,
     ):
-        super().__init__(
-            info_input=info_input,
-            queue_out=queue_out,
-            shared_memory_names_out=shared_memory_names_out,
-            x=info_input.x,
-            y=info_input.y,
-            colourspace=Colourspace.greyscale,
-        )
-        self.background_subtractor = cv2.createBackgroundSubtractorKNN(
-            history=history, detectShadows=False, dist2Threshold=dist2_threshold
-        )
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
+        self.history = history
+        self.dist2_threshold = dist2_threshold
+
+        # always outputs greyscale
+        self.info_output.colourspace = Colourspace.greyscale
 
     def process_frame(self, frame_in, frame_out) -> bool:
-        self.background_subtractor.apply(frame_in, frame_out)
+        if self._background_subtractor is None:
+            self._background_subtractor = cv2.createBackgroundSubtractorKNN(
+                history=self.history, detectShadows=False, dist2Threshold=self.dist2_threshold
+            )
+        self._background_subtractor.apply(frame_in, frame_out)
         return True
 
 
@@ -98,18 +99,10 @@ class BackgroundMaskDenoiser(FrameConsumerProducer):
     def __init__(
         self,
         info_input: FrameQueueInfoOutput,
-        queue_out: Queue,
-        shared_memory_names_out: tuple[str, ...],
+        queue_manager: SharedMemoryQueueManager,
         kernel_size: int = 3,
     ):
-        super().__init__(
-            info_input=info_input,
-            queue_out=queue_out,
-            shared_memory_names_out=shared_memory_names_out,
-            x=info_input.x,
-            y=info_input.y,
-            colourspace=info_input.colourspace,
-        )
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
         self.kernel_size = kernel_size
 
     def process_frame(self, frame_in, frame_out) -> bool:
@@ -168,27 +161,22 @@ class Rescaler(FrameConsumerProducer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
-        queue_out: Queue,
-        shared_memory_names_out: tuple[str, ...],
         x: int,
         y: int,
         fps_in: int,
         fps_out: int,
+        info_input: FrameQueueInfoOutput,
+        queue_manager: SharedMemoryQueueManager,
     ):
-        super().__init__(
-            info_input=info_input,
-            queue_out=queue_out,
-            shared_memory_names_out=shared_memory_names_out,
-            x=x,
-            y=y,
-            colourspace=info_input.colourspace,
-        )
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
         self.res = (x, y)
         if fps_out > fps_in:
             msg = "fps_out cannot be greater than fps_in"
             raise ValueError(msg)
         self.fps_ratio = fps_in / fps_out
+
+        # override default input-based output information from parent class
+        self.info_output = FrameQueueInfoOutput(self.queue_resources.queue, x, y, info_input.colourspace)
 
     def process_frame(self, frame_in, frame_out) -> bool:
         if self.frame_no % self.fps_ratio < 1.0:
