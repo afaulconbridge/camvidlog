@@ -3,7 +3,8 @@ import argparse
 import pandas as pd
 import seaborn as sns
 
-sns.set_theme()
+# figure size in inches at 100 dpi
+sns.set_theme(rc={"figure.figsize": (19.20, 10.80)})
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -13,7 +14,8 @@ if __name__ == "__main__":
     for filename in filenames:
         filename_out = filename[:-4] + ".png"
         data = pd.read_csv(filename)
-        plot = sns.relplot(data=data, x="frame_no", y="hits.0.score", kind="line")
+
+        plot = sns.lineplot(data, x="frame_no", y="mask.mean")
         fig = plot.figure
-        fig.axes[0].set_ylim(0, 1)
+        fig.axes[0].set_ylim(0, 255)
         fig.savefig(filename_out)

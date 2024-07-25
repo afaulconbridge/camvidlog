@@ -1,4 +1,4 @@
-import time
+import logging
 from csv import DictWriter
 from dataclasses import dataclass
 from enum import Enum
@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 
 from camvidlog.procs.queues import SharedMemoryQueueManager, SharedMemoryQueueResources
+
+logger = logging.getLogger(__name__)
 
 TIMEOUT = 180.0
 
@@ -149,6 +151,7 @@ class FrameProducer:
                 success, frame_no, frame_time = self.generate_frame_into(shared_arrays[shared_pointer])
                 if not success:
                     break
+                logger.debug(f"{self} generated {frame_no:4d}")
 
                 self.info_output.queue.put(
                     (self.queue_resources.shared_memory_names[shared_pointer], frame_no, frame_time),
@@ -246,6 +249,7 @@ class FrameConsumer:
                         self.info_input.shape, dtype=np.uint8, buffer=shared_memory[shared_memory_name].buf
                     )
                 self.process_frame(shared_array[shared_memory_name])
+                logger.debug(f"{self} consumed {frame_no:4d}")
         finally:
             self.close()
 
@@ -307,6 +311,7 @@ class FrameConsumerProducer(FrameConsumer, FrameProducer):
                     shared_array_in[shared_memory_name_in],
                     shared_array_out[shared_pointer],
                 )
+                logger.debug(f"{self} consumed {frame_no:4d}")
 
                 if has_output:
                     queue_out.put(
@@ -331,9 +336,7 @@ class FrameConsumerProducer(FrameConsumer, FrameProducer):
             self.info_output.queue.put(None, timeout=TIMEOUT)
 
     def process_frame(self, frame_in: np.ndarray, frame_out: np.ndarray) -> bool:
-        before = time.time()
-        # np.copyto(frame_out, frame_in)
-        after = time.time()
+        np.copyto(frame_out, frame_in)
         return True
 
 
