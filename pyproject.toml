@@ -7,7 +7,7 @@ name = "camvidlog"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 license = "MIT"
 keywords = []
 authors = [
@@ -16,10 +16,6 @@ authors = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
@@ -28,15 +24,17 @@ dependencies = [
   "opencv-python-headless",
   "ffmpeg-python",
   "transformers",
+  "pillow",
+  "seaborn"
 ]
 
 [dirs.env]
 virtual = ".hatch"
 
 [project.urls]
-Documentation = "https://github.com/unknown/camvidlog#readme"
-Issues = "https://github.com/unknown/camvidlog/issues"
-Source = "https://github.com/unknown/camvidlog"
+Documentation = "https://github.com/afaulconbridge/camvidlog#readme"
+Issues = "https://github.com/afaulconbridge/camvidlog/issues"
+Source = "https://github.com/afaulconbridge/camvidlog"
 
 
 [tool.hatch.version]
@@ -51,7 +49,7 @@ cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.7", "3.8", "3.9", "3.10", "3.11"]
+python = [ "3.11"]
 
 [tool.hatch.envs.lint]
 detached = true
@@ -68,7 +66,7 @@ line-length = 120
 skip-string-normalization = true
 
 [tool.ruff]
-target-version = "py37"
+target-version = "py311"
 line-length = 120
 [tool.ruff.lint]
 select = [
