@@ -4,6 +4,7 @@ from multiprocessing import Process, Queue
 
 from camvidlog.procs.basics import (
     DataRecorder,
+    FFMPEGReader,
     FileReader,
     Resolution,
     peek_in_file,
@@ -25,6 +26,7 @@ if __name__ == "__main__":
         q_results = Queue()
         with q_manager:
             file_reader = FileReader(queue_manager=q_manager, filename=filename)
+            # file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
             rescaler = Rescaler(
                 info_input=file_reader.info_output,
                 queue_manager=q_manager,

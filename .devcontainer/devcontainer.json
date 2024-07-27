@@ -69,7 +69,7 @@
 	],
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "pip3 install --user -r requirements.txt",
-	"postCreateCommand": "sudo apt-get update && sudo apt-get --assume-yes install python3-opencv"
+	"postCreateCommand": "sudo apt-get update && sudo apt-get --assume-yes install python3-opencv ffmpeg"
 	// Configure tool-specific properties.
 	// "customizations": {},
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.

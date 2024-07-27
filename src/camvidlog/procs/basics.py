@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
-from typing import Self
+from subprocess import Popen
 
 import cv2
+import ffmpeg
 import numpy as np
 
 from camvidlog.procs.queues import SharedMemoryQueueManager, SharedMemoryQueueResources
@@ -180,11 +181,6 @@ class FileReader(FrameProducer):
         self.filename = filename
         super().__init__(**kwargs)
 
-    @classmethod
-    def from_file(cls, filename: str, queue: Queue, shared_memory_names: tuple[str, ...]) -> Self:
-        vidstats = peek_in_file(filename)
-        return cls(filename, vidstats.fps, queue, shared_memory_names, vidstats.x, vidstats.y, vidstats.colourspace)
-
     @property
     def _shape(self):
         shape = (self.info_output.y, self.info_output.x)
@@ -223,6 +219,66 @@ class FileReader(FrameProducer):
             self.frame_no += 1
             self.frame_time = self.frame_no / self.video_file_stats.fps
             return True, self.frame_no, self.frame_time
+
+
+class FFMPEGReader(FrameProducer):
+    filename: str
+    reader: Popen | None = None
+    _video_file_stats: VideoFileStats | None = None
+    frame_no: int = 0
+    frame_time: float = 0.0
+
+    def __init__(self, *, filename: str, **kwargs):
+        self.filename = filename
+        super().__init__(**kwargs)
+
+    @property
+    def _shape(self):
+        shape = (self.info_output.y, self.info_output.x)
+        shape = (*shape, 3) if self.info_output.colourspace == Colourspace.RGB else shape
+        return shape
+
+    @property
+    def video_file_stats(self):
+        if self._video_file_stats is None:
+            self._video_file_stats = peek_in_file(self.filename)
+        return self._video_file_stats
+
+    def _get_nbytes(self) -> int:
+        return self.video_file_stats.nbytes
+
+    def _get_x_y(self) -> tuple[int, int]:
+        return self.video_file_stats.x, self.video_file_stats.y
+
+    def _get_colourspace(self) -> Colourspace:
+        return self.video_file_stats.colourspace
+
+    def setup(self) -> None:
+        self.reader = (
+            ffmpeg.input(self.filename)
+            .output("pipe:", format="rawvideo", pix_fmt="rgb24")
+            .run_async(pipe_stdout=True, quiet=True)
+        )
+
+    def close(self) -> None:
+        super().close()
+
+    def generate_frame_into(self, array: np.ndarray) -> tuple[bool, int | None, float | None]:
+        if self.reader.poll() is not None:
+            return False, None, None
+
+        in_bytes = self.reader.stdout.read(self.info_output.nbytes)
+        if not in_bytes:
+            return False, None, None
+
+        array_buffer = np.frombuffer(in_bytes, np.uint8).reshape(
+            [self.info_output.y, self.info_output.x, 3 if self.info_output.colourspace == Colourspace.RGB else 1]
+        )
+        np.copyto(array, array_buffer)
+
+        self.frame_no += 1
+        self.frame_time = self.frame_no / self.video_file_stats.fps
+        return True, self.frame_no, self.frame_time
 
 
 class FrameConsumer:
