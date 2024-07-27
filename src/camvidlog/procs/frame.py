@@ -1,7 +1,9 @@
 import logging
 from multiprocessing import Queue
+from subprocess import Popen
 
 import cv2
+import ffmpeg
 import numpy as np
 
 from camvidlog.procs.basics import Colourspace, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
@@ -38,6 +40,46 @@ class SaveToFile(FrameConsumer):
     def close(self) -> None:
         if self.out:
             self.out.release()
+
+
+class FFMPEGToFile(FrameConsumer):
+    filename: str
+    fps: float
+    out: Popen | None = None
+
+    def __init__(self, filename: str, fps: float, info_input: FrameQueueInfoOutput):
+        super().__init__(info_input=info_input)
+        self.filename = filename
+        self.fps = fps
+        self.out = None
+
+    def process_frame(self, frame) -> None:
+        # TODO handle grayscale
+        if not self.out:
+            if self.info_input.colourspace == Colourspace.RGB:
+                pix_fmt = "rgb24"
+            elif self.info_input.colourspace == Colourspace.greyscale:
+                pix_fmt = "gray"
+            else:
+                raise ValueError(f"unsupported colourspace {self.info_input.colourspace}")
+            self.out = (
+                ffmpeg.input(
+                    "pipe:",
+                    format="rawvideo",
+                    pix_fmt=pix_fmt,
+                    r=self.fps,
+                    s=f"{self.info_input.x}x{self.info_input.y}",
+                )
+                .output(self.filename, pix_fmt="yuv420p")
+                .overwrite_output()
+                .run_async(
+                    pipe_stdin=True,
+                    quiet=True,
+                )
+            )
+        self.out.stdin.write(frame.astype(np.uint8).tobytes())
+
+        logger.debug(f"Wrote {self.frame_no:4f} to {self.filename}")
 
 
 class BackgroundSubtractorMOG2(FrameConsumerProducer):

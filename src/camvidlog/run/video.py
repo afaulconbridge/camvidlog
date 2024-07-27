@@ -9,7 +9,14 @@ from camvidlog.procs.basics import (
     Resolution,
     peek_in_file,
 )
-from camvidlog.procs.frame import BackgroundMaskDenoiser, BackgroundSubtractorMOG2, MaskStats, Rescaler, SaveToFile
+from camvidlog.procs.frame import (
+    BackgroundMaskDenoiser,
+    BackgroundSubtractorMOG2,
+    FFMPEGToFile,
+    MaskStats,
+    Rescaler,
+    SaveToFile,
+)
 from camvidlog.procs.queues import SharedMemoryQueueManager
 
 if __name__ == "__main__":
@@ -44,7 +51,9 @@ if __name__ == "__main__":
             background_mask_stats = MaskStats(
                 info_input=background_mask_denoiser.info_output, queue_manager=q_manager, queue_results=q_results
             )
-            save_to_file = SaveToFile("output.avi", 5, background_mask_stats.info_output)
+            # save_to_file = SaveToFile("output.avi", 5, background_mask_stats.info_output)
+            save_to_file = FFMPEGToFile("output.mp4", 5, background_mask_stats.info_output)
+
             data_recorder = DataRecorder(q_results, 1, filename.replace(".MP4", ".stats.csv"))
 
             ps = []
