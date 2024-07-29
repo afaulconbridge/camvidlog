@@ -396,6 +396,89 @@ class FrameConsumerProducer(FrameConsumer, FrameProducer):
         return True
 
 
+class FrameCopier(FrameConsumerProducer):
+    def __init__(self, info_input: FrameQueueInfoOutput, queue_manager: SharedMemoryQueueManager, copy_number: int):
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
+        x, y = self._get_x_y()
+        colourspace = self._get_colourspace()
+        nbytes = self._get_nbytes()
+
+        self.info_outputs = [self.info_output]
+        self.info_output = None
+        self.queue_resourcess = [self.queue_resources]
+        self.queue_resources = None
+        for _ in range(1, copy_number):
+            queue_resources = queue_manager.make_queue(nbytes)
+            self.queue_resourcess.append(queue_resources)
+            self.info_outputs.append(FrameQueueInfoOutput(queue_resources.queue, x, y, colourspace))
+
+    def _get_nbytes(self) -> int:
+        return self.info_input.nbytes
+
+    def _get_x_y(self) -> tuple[int, int]:
+        return (self.info_input.x, self.info_input.y)
+
+    def _get_colourspace(self) -> Colourspace:
+        return self.info_input.colourspace
+
+    def __call__(self):
+        try:
+            self.setup()
+            shared_pointer = 0
+            shared_memory_in: dict[str, SharedMemory] = {}
+            shared_array_in: dict[str, np.ndarray] = {}
+
+            shared_memory_out: tuple[tuple[SharedMemory, ...]] = tuple(
+                tuple(SharedMemory(name, False) for name in queue_resource.shared_memory_names)
+                for queue_resource in self.queue_resourcess
+            )
+            shared_array_out: tuple[tuple[np.ndarray, ...]] = tuple(
+                tuple(
+                    np.ndarray(self.info_output.shape, dtype=np.uint8, buffer=shared_memory.buf)
+                    for shared_memory in shared_memory_out_inner
+                )
+                for shared_memory_out_inner in shared_memory_out
+            )
+
+            while item := self.info_input.queue.get(timeout=TIMEOUT):
+                shared_memory_name_in, frame_no, frame_time = item
+                self.frame_no = frame_no
+
+                if shared_memory_name_in not in shared_memory_in:
+                    shared_memory_in[shared_memory_name_in] = SharedMemory(name=shared_memory_name_in, create=False)
+                    shared_array_in[shared_memory_name_in] = np.ndarray(
+                        self.info_input.shape, dtype=np.uint8, buffer=shared_memory_in[shared_memory_name_in].buf
+                    )
+
+                logger.debug(f"{self} consumed {frame_no:4d}")
+                for shared_array_out_inner in shared_array_out:
+                    np.copyto(shared_array_out_inner[shared_pointer], shared_array_in[shared_memory_name_in])
+
+                for info_output, queue_resources in zip(self.info_outputs, self.queue_resourcess, strict=False):
+                    info_output.queue.put(
+                        (queue_resources.shared_memory_names[shared_pointer], frame_no, frame_time),
+                        timeout=TIMEOUT,
+                    )
+
+                if shared_pointer == 0:
+                    shared_pointer = len(self.queue_resources.shared_memory_names) - 1
+                else:
+                    shared_pointer -= 1
+        finally:
+            self.close()
+
+            for mem in shared_memory_in.values():
+                mem.close()
+            for mems in shared_memory_out:
+                for mem in mems:
+                    mem.close()
+
+            self.info_input.queue.close()
+            # sent end sentinel
+            for info_output in self.info_outputs:
+                info_output.queue.put(None, timeout=TIMEOUT)
+
+
 class DataRecorder:
     queue: Queue
     sentinels_max: int

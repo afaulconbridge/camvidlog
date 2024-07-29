@@ -6,6 +6,7 @@ from camvidlog.procs.basics import (
     DataRecorder,
     FFMPEGReader,
     FileReader,
+    FrameCopier,
     Resolution,
     peek_in_file,
 )
@@ -33,28 +34,35 @@ if __name__ == "__main__":
         q_results = Queue()
         with q_manager:
             file_reader = FileReader(queue_manager=q_manager, filename=filename)
-            # file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
-            rescaler = Rescaler(
-                info_input=file_reader.info_output,
-                queue_manager=q_manager,
-                x=Resolution.SD.value[1],
-                y=Resolution.SD.value[0],
-                fps_in=30,
-                fps_out=5,
-            )
-            background_subtractor = BackgroundSubtractorMOG2(
-                info_input=rescaler.info_output, queue_manager=q_manager, history=500, var_threshold=16
-            )
-            background_mask_denoiser = BackgroundMaskDenoiser(
-                info_input=background_subtractor.info_output, queue_manager=q_manager, kernel_size=3
-            )
-            background_mask_stats = MaskStats(
-                info_input=background_mask_denoiser.info_output, queue_manager=q_manager, queue_results=q_results
-            )
-            # save_to_file = SaveToFile("output.avi", 5, background_mask_stats.info_output)
-            save_to_file = FFMPEGToFile("output.mp4", 5, background_mask_stats.info_output)
 
-            data_recorder = DataRecorder(q_results, 1, filename.replace(".MP4", ".stats.csv"))
+            # file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
+            copier = FrameCopier(file_reader.info_output, q_manager, len(Resolution))
+            for i, res in enumerate(Resolution):
+                rescaler = Rescaler(
+                    info_input=copier.info_outputs[i],
+                    queue_manager=q_manager,
+                    x=res.value[1],
+                    y=res.value[0],
+                    fps_in=30,
+                    fps_out=5,
+                )
+                background_subtractor = BackgroundSubtractorMOG2(
+                    info_input=rescaler.info_output, queue_manager=q_manager, history=500, var_threshold=16
+                )
+                background_mask_denoiser = BackgroundMaskDenoiser(
+                    info_input=background_subtractor.info_output, queue_manager=q_manager, kernel_size=3
+                )
+                background_mask_stats = MaskStats(
+                    info_input=background_mask_denoiser.info_output,
+                    queue_manager=q_manager,
+                    queue_results=q_results,
+                    prefix=f"{res.value[1]}x{res.value[0]}",
+                )
+                save_to_file = FFMPEGToFile(
+                    f"{filename}.{res.value[1]}x{res.value[0]}.csv", 5, background_mask_stats.info_output
+                )
+
+            data_recorder = DataRecorder(q_results, len(Resolution), f"{filename}.csv")
 
             ps = []
             ps.append(Process(target=file_reader))
