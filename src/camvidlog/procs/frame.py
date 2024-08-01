@@ -81,6 +81,11 @@ class FFMPEGToFile(FrameConsumer):
 
         logger.debug(f"Wrote {self.frame_no:4f} to {self.filename}")
 
+    def close(self):
+        if self.out:
+            self.out.stdin.close()
+            self.out.wait()
+
 
 class BackgroundSubtractorMOG2(FrameConsumerProducer):
     _background_subtractor: cv2.BackgroundSubtractorMOG2 | None = None
@@ -169,6 +174,7 @@ class BackgroundMaskDenoiser(FrameConsumerProducer):
 class MaskStats(FrameConsumerProducer):
     queue_results: Queue
     prefix: str
+    supplementary: dict[str, str]
 
     def __init__(
         self,
@@ -176,33 +182,37 @@ class MaskStats(FrameConsumerProducer):
         queue_manager: SharedMemoryQueueManager,
         queue_results: Queue,
         prefix: str = "",
+        supplementary: dict[str, str] | None = None,
     ):
         super().__init__(info_input=info_input, queue_manager=queue_manager)
         self.queue_results = queue_results
         self.prefix = f"{prefix}." if prefix else ""
+        self.supplementary = supplementary if supplementary else {}
 
     def process_frame(self, frame_in, frame_out) -> bool:
+        metrics = {}
         mean = frame_in.mean()
-        self.queue_results.put((self.frame_no, f"{self.prefix}mask.mean", float(mean)))
+        metrics["mask.mean"] = mean
 
         # TODO avoid allocation
         contours, _ = cv2.findContours(frame_in, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for i, contour in enumerate(contours):
             area = cv2.contourArea(contour)
             area_proportion = area / self.info_input.area
-            self.queue_results.put((self.frame_no, f"{self.prefix}mask.{i}.area", area_proportion))
+            metrics[f"mask.{i}.area_proportion"] = area_proportion
 
             contour_bbox = cv2.boundingRect(contour)
             x, y, w, h = contour_bbox
             x_prop = x / self.info_input.x
             y_prop = y / self.info_input.y
             ratio = h / w
-            self.queue_results.put((self.frame_no, f"{self.prefix}mask.{i}.x", x_prop))
-            self.queue_results.put((self.frame_no, f"{self.prefix}mask.{i}.y", y_prop))
-            self.queue_results.put((self.frame_no, f"{self.prefix}mask.{i}.ratio", ratio))
-
+            metrics[f"mask.{i}.x_prop"] = x_prop
+            metrics[f"mask.{i}.y_prop"] = y_prop
+            metrics[f"mask.{i}.ratio"] = ratio
             # TODO identify same contour frame-to-frame for comparable stats
             break
+        metrics.update(self.supplementary)
+        self.queue_results.put((self.frame_no, metrics))
 
         np.copyto(frame_out, frame_in)
         return True

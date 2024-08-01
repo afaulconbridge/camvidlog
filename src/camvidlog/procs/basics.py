@@ -19,10 +19,10 @@ TIMEOUT = 180.0
 
 class Resolution(Enum):
     # Y,X to match openCV
-    VGA = (480, 640)
+    VGA = (480, 854)  # FWVGA
     SD = (720, 1280)
-    HD = (1080, 1920)  # 2k
-    UHD = (2160, 3840)  # 4K
+    HD = (1080, 1920)  # 2k, full HD
+    UHD = (2160, 3840)  # 4K, UHD
 
 
 class Colourspace(Enum):
@@ -434,7 +434,7 @@ class FrameCopier(FrameConsumerProducer):
             )
             shared_array_out: tuple[tuple[np.ndarray, ...]] = tuple(
                 tuple(
-                    np.ndarray(self.info_output.shape, dtype=np.uint8, buffer=shared_memory.buf)
+                    np.ndarray(self.info_outputs[0].shape, dtype=np.uint8, buffer=shared_memory.buf)
                     for shared_memory in shared_memory_out_inner
                 )
                 for shared_memory_out_inner in shared_memory_out
@@ -461,7 +461,7 @@ class FrameCopier(FrameConsumerProducer):
                     )
 
                 if shared_pointer == 0:
-                    shared_pointer = len(self.queue_resources.shared_memory_names) - 1
+                    shared_pointer = len(self.queue_resourcess[0].shared_memory_names) - 1
                 else:
                     shared_pointer -= 1
         finally:
@@ -502,11 +502,13 @@ class DataRecorder:
                 if self.sentinels_current >= self.sentinels_max:
                     running = False
             else:
-                frame_no, metric, value = item
+                frame_no, metrics = item
                 frame_max = max(frame_max, frame_no)
-                if metric not in self.metrics:
-                    self.metrics[metric] = {}
-                self.metrics[metric][frame_no] = value
+
+                for metric, value in metrics.items():
+                    if metric not in self.metrics:
+                        self.metrics[metric] = {}
+                    self.metrics[metric][frame_no] = value
 
         with open(self.outfilename, "w") as outfile:
             dict_writer = DictWriter(outfile, ("frame_no", *tuple(self.metrics.keys())))

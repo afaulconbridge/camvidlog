@@ -9,11 +9,11 @@ class SharedMemoryQueueResources:
     queue: Queue
     shared_memory_names: tuple[str, ...]
 
-    def __init__(self, nbytes: int, size: int = 2):
+    def __init__(self, nbytes: int, size: int = 3):
         if size < 2:  # noqa: PLR2004
             msg = "size < 2"
             raise ValueError(msg)
-        self.queue = Queue(size - 1)
+        self.queue = Queue(size - 2)
         shared_memory = tuple(SharedMemory(create=True, size=nbytes) for _ in range(size))
         self.shared_memory_names = tuple(str(m.name) for m in shared_memory)
         for mem in shared_memory:

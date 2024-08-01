@@ -32,11 +32,14 @@ if __name__ == "__main__":
         # otherwise it will be eagerly cleaned up when the child terminates
         q_manager = SharedMemoryQueueManager()
         q_results = Queue()
+        ps = []
         with q_manager:
             file_reader = FileReader(queue_manager=q_manager, filename=filename)
+            ps.append(Process(target=file_reader))
 
             # file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
             copier = FrameCopier(file_reader.info_output, q_manager, len(Resolution))
+            ps.append(Process(target=copier))
             for i, res in enumerate(Resolution):
                 rescaler = Rescaler(
                     info_input=copier.info_outputs[i],
@@ -59,18 +62,16 @@ if __name__ == "__main__":
                     prefix=f"{res.value[1]}x{res.value[0]}",
                 )
                 save_to_file = FFMPEGToFile(
-                    f"{filename}.{res.value[1]}x{res.value[0]}.csv", 5, background_mask_stats.info_output
+                    f"{filename}.{res.value[1]}x{res.value[0]}.mp4", 5, background_mask_stats.info_output
                 )
+                ps.append(Process(target=rescaler))
+                ps.append(Process(target=background_subtractor))
+                ps.append(Process(target=background_mask_denoiser))
+                ps.append(Process(target=background_mask_stats))
+                ps.append(Process(target=save_to_file))
 
             data_recorder = DataRecorder(q_results, len(Resolution), f"{filename}.csv")
 
-            ps = []
-            ps.append(Process(target=file_reader))
-            ps.append(Process(target=rescaler))
-            ps.append(Process(target=background_subtractor))
-            ps.append(Process(target=background_mask_denoiser))
-            ps.append(Process(target=background_mask_stats))
-            ps.append(Process(target=save_to_file))
             ps.append(Process(target=data_recorder))
 
             starttime = time.time()
