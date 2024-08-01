@@ -12,10 +12,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     filenames: tuple[str] = tuple(args.filename)
     for filename in filenames:
-        filename_out = filename[:-4] + ".png"
+        filename_out = filename + ".png"
         data = pd.read_csv(filename)
 
-        plot = sns.lineplot(data, x="frame_no", y="mask.mean")
+        plot = sns.lineplot(data, x="frame_no", y="mask.mean", hue="res")
         fig = plot.figure
-        fig.axes[0].set_ylim(0, 255)
+        fig.axes[0].set_ylim(0, 1)
         fig.savefig(filename_out)
+        fig.clf()

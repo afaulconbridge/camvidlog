@@ -34,6 +34,9 @@ if __name__ == "__main__":
         q_results = Queue()
         ps = []
         with q_manager:
+            data_recorder = DataRecorder(q_results, len(Resolution), f"{filename}.csv")
+            ps.append(Process(target=data_recorder))
+
             file_reader = FileReader(queue_manager=q_manager, filename=filename)
             ps.append(Process(target=file_reader))
 
@@ -58,8 +61,8 @@ if __name__ == "__main__":
                 background_mask_stats = MaskStats(
                     info_input=background_mask_denoiser.info_output,
                     queue_manager=q_manager,
-                    queue_results=q_results,
-                    prefix=f"{res.value[1]}x{res.value[0]}",
+                    data_recorder=data_recorder,
+                    supplementary={"res": f"{res.value[1]}x{res.value[0]}"},
                 )
                 save_to_file = FFMPEGToFile(
                     f"{filename}.{res.value[1]}x{res.value[0]}.mp4", 5, background_mask_stats.info_output
@@ -69,10 +72,6 @@ if __name__ == "__main__":
                 ps.append(Process(target=background_mask_denoiser))
                 ps.append(Process(target=background_mask_stats))
                 ps.append(Process(target=save_to_file))
-
-            data_recorder = DataRecorder(q_results, len(Resolution), f"{filename}.csv")
-
-            ps.append(Process(target=data_recorder))
 
             starttime = time.time()
             for p in ps:

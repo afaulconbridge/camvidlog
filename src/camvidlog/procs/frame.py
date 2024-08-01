@@ -6,7 +6,7 @@ import cv2
 import ffmpeg
 import numpy as np
 
-from camvidlog.procs.basics import Colourspace, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
 from camvidlog.procs.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
@@ -180,19 +180,30 @@ class MaskStats(FrameConsumerProducer):
         self,
         info_input: FrameQueueInfoOutput,
         queue_manager: SharedMemoryQueueManager,
-        queue_results: Queue,
+        data_recorder: DataRecorder,
         prefix: str = "",
         supplementary: dict[str, str] | None = None,
     ):
         super().__init__(info_input=info_input, queue_manager=queue_manager)
-        self.queue_results = queue_results
         self.prefix = f"{prefix}." if prefix else ""
         self.supplementary = supplementary if supplementary else {}
+        columns = (
+            "mask.mean",
+            "mask.0.area_proportion",
+            "mask.0.x_prop",
+            "mask.0.y_prop",
+            "mask.0.ratio",
+            *self.supplementary.keys(),
+        )
+        self.queue_results = data_recorder.register(columns)
 
     def process_frame(self, frame_in, frame_out) -> bool:
         metrics = {}
-        mean = frame_in.mean()
-        metrics["mask.mean"] = mean
+        mean = frame_in.mean() / 255
+        # drop too high mean
+        # probaly a camera mode change or stream start
+        if mean < 0.50:
+            metrics["mask.mean"] = mean
 
         # TODO avoid allocation
         contours, _ = cv2.findContours(frame_in, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

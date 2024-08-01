@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterable
 from csv import DictWriter
 from dataclasses import dataclass
 from enum import Enum
@@ -484,6 +485,7 @@ class DataRecorder:
     sentinels_max: int
     sentinels_current: int
     metrics: dict[int, dict[str, int | float]]
+    columns: list[str]
 
     def __init__(self, queue: Queue, sentinels_max: int, outfilename: str):
         self.queue = queue
@@ -491,33 +493,25 @@ class DataRecorder:
         self.sentinels_current = 0
         self.metrics = {}
         self.outfilename = outfilename
+        self.columns = ["frame_no"]
+
+    def register(self, columns: Iterable[str]) -> Queue:
+        self.columns.extend(column for column in columns if column not in self.columns)
+        return self.queue
 
     def __call__(self):
         running = True
-        frame_max = 0
-        while running:
-            item = self.queue.get(timeout=TIMEOUT)
-            if item is None:
-                self.sentinels_current += 1
-                if self.sentinels_current >= self.sentinels_max:
-                    running = False
-            else:
-                frame_no, metrics = item
-                frame_max = max(frame_max, frame_no)
-
-                for metric, value in metrics.items():
-                    if metric not in self.metrics:
-                        self.metrics[metric] = {}
-                    self.metrics[metric][frame_no] = value
-
         with open(self.outfilename, "w") as outfile:
-            dict_writer = DictWriter(outfile, ("frame_no", *tuple(self.metrics.keys())))
+            dict_writer = DictWriter(outfile, self.columns)
             dict_writer.writeheader()
-            for i in range(frame_max):
-                row = {}
-                for metric in self.metrics:
-                    if i in self.metrics[metric]:
-                        row[metric] = self.metrics[metric][i]
-                if row:
-                    row["frame_no"] = i
+            while running:
+                item = self.queue.get(timeout=TIMEOUT)
+                if item is None:
+                    self.sentinels_current += 1
+                    if self.sentinels_current >= self.sentinels_max:
+                        running = False
+                else:
+                    frame_no, metrics = item
+                    row = dict(metrics)
+                    row["frame_no"] = frame_no
                     dict_writer.writerow(row)
