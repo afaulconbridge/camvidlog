@@ -56,7 +56,6 @@ class GroundingDino(FrameConsumer):
         #            print((i, float(score), str(label)))
         if hits:
             score, label, bbox = hits[0]
-            print((float(score), str(label)))
             self.queue_results.put((self.frame_no, "hits.0.score", float(score)))
             self.queue_results.put((self.frame_no, "hits.0.label", str(label)))
             # yield float(score), str(label), [int(i) for i in bbox]

@@ -2,8 +2,9 @@ import argparse
 import json
 import logging
 import os
+from collections.abc import Generator, Iterable
 from pathlib import Path
-from typing import Generator, Iterable, Optional
+from typing import Optional
 
 import cv2
 import torch
@@ -17,8 +18,8 @@ logger.setLevel(logging.DEBUG)
 
 class VideoManager:
     videopath: Path | str
-    fps: Optional[float] = None
-    capture: Optional[cv2.VideoCapture]
+    fps: float | None = None
+    capture: cv2.VideoCapture | None
 
     def __init__(self, videopath: Path | str):
         self.videopath = videopath
@@ -94,7 +95,7 @@ class ImageManager:
                 text_threshold=self.threshold_text,
                 target_sizes=[image_pillow.size[::-1]],
             )[0]
-        for score, label, bbox in zip(*results.values()):
+        for score, label, bbox in zip(*results.values(), strict=False):
             yield float(score), str(label), [int(i) for i in bbox]
 
 

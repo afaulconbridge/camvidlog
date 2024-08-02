@@ -66,4 +66,3 @@ if __name__ == "__main__":
                 p.join()
 
             endtime = time.time()
-            print(f"Ran in {endtime-starttime:.2f}s")
