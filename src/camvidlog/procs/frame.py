@@ -61,7 +61,8 @@ class FFMPEGToFile(FrameConsumer):
             elif self.info_input.colourspace == Colourspace.greyscale:
                 pix_fmt = "gray"
             else:
-                raise ValueError(f"unsupported colourspace {self.info_input.colourspace}")
+                msg = f"unsupported colourspace {self.info_input.colourspace}"
+                raise ValueError(msg)
             self.out = (
                 ffmpeg.input(
                     "pipe:",
@@ -69,6 +70,7 @@ class FFMPEGToFile(FrameConsumer):
                     pix_fmt=pix_fmt,
                     r=self.fps,
                     s=f"{self.info_input.x}x{self.info_input.y}",
+                    hwaccel="cuda",
                 )
                 .output(self.filename, pix_fmt="yuv420p")
                 .overwrite_output()

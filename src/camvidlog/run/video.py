@@ -37,10 +37,10 @@ if __name__ == "__main__":
             data_recorder = DataRecorder(q_results, len(Resolution), f"{filename}.csv")
             ps.append(Process(target=data_recorder))
 
-            file_reader = FileReader(queue_manager=q_manager, filename=filename)
+            #file_reader = FileReader(queue_manager=q_manager, filename=filename)
+            file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
             ps.append(Process(target=file_reader))
 
-            # file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
             copier = FrameCopier(file_reader.info_output, q_manager, len(Resolution))
             ps.append(Process(target=copier))
             for i, res in enumerate(Resolution):
@@ -81,4 +81,3 @@ if __name__ == "__main__":
                 p.join()
 
             endtime = time.time()
-            print(f"Ran in {endtime-starttime:.2f}s")

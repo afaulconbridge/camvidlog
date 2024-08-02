@@ -15,6 +15,7 @@
   - [Blog](#blog)
     - [Image enhancement](#image-enhancement)
     - [Difficult animals](#difficult-animals)
+  - [FFMPEG](#ffmpeg)
 
 ## Installation
 
@@ -80,3 +81,12 @@ In practice, this does not work. We can do nice contrast balancing, and it works
 ### Difficult animals
 
 One of the more challenging animals seems to be hedgehogs. It might be because these are particularly small relative to the entire image. 20231120033202_VD_00336.MP4 is an example of a hedgehog. Foxes are also something that are often missing from AI training datasets and an example is data/20231121002042_VD_00342.MP4
+
+
+## FFMPEG
+
+ffmpeg -hide_banner -hwaccels
+ffmpeg -hide_banner -encoders
+ffmpeg -hide_banner -decoders
+ffmpeg -hide_banner -hwaccel cuda -i input.mp4 output.mp4
+ffmpeg -c:v h264_cuvid -i input.h264.mp4 output.h264.mp4

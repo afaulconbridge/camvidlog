@@ -256,7 +256,7 @@ class FFMPEGReader(FrameProducer):
 
     def setup(self) -> None:
         self.reader = (
-            ffmpeg.input(self.filename)
+            ffmpeg.input(self.filename, hwaccel="cuda")
             .output("pipe:", format="rawvideo", pix_fmt="rgb24")
             .run_async(pipe_stdout=True, quiet=True)
         )
