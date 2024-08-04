@@ -66,6 +66,8 @@ Monitor hardware with:
 nvtop
 ```
 
+Note: when using a remote host dev container, connect to the host first then create the container from the repo. Also, recovery containers might not work so a command like this is helpful to get into the volume and edit if it won't start ("open in a recovery container" jumps back to the local host, which isn't useful as it doesn't contain the modified/broken files): `docker run -it --rm -v camvidlog-procs-d2e8b20ccf5ec88cb9c0dd5c615ddaadf78edc93fffe948d8a03d8ea302f07a8:/recovery debian`
+
 ## License
 
 `camvidlog` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
