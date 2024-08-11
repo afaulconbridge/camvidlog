@@ -1,10 +1,15 @@
+import gc
+import logging
 from multiprocessing import Queue
 from typing import Any
 
+import torch
 from PIL import Image
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor, GroundingDinoProcessor
 
-from camvidlog.procs.basics import FrameConsumer, FrameQueueInfoOutput
+from camvidlog.procs.basics import DataRecorder, FrameConsumer, FrameQueueInfoOutput
+
+logger = logging.getLogger(__name__)
 
 
 class GroundingDino(FrameConsumer):
@@ -17,20 +22,27 @@ class GroundingDino(FrameConsumer):
         self,
         info_input: FrameQueueInfoOutput,
         queries: tuple[str, ...],
-        queue_results: Queue,
+        data_recorder: DataRecorder,
         model_id: str,
         box_threshold=0.25,
         text_threshold=0.25,
+        supplementary: dict[str, str] | None = None,
     ):
         super().__init__(
             info_input=info_input,
         )
-        self.queue_results = queue_results
         # will only accept a single string
         self.text_queries = ". ".join(queries) + "."
         self.model_id = model_id
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
+        self.supplementary = supplementary if supplementary else {}
+        columns = (
+            "hits.0.score",
+            "hits.0.label",
+            *self.supplementary.keys(),
+        )
+        self.queue_results = data_recorder.register(columns)
 
     def setup(self) -> None:
         self.processor: GroundingDinoProcessor = AutoProcessor.from_pretrained(self.model_id)
@@ -54,11 +66,22 @@ class GroundingDino(FrameConsumer):
         #        for i, hit in enumerate(hits):
         #            score, label, bbox = hit
         #            print((i, float(score), str(label)))
+        metrics = {}
         if hits:
             score, label, bbox = hits[0]
-            self.queue_results.put((self.frame_no, "hits.0.score", float(score)))
-            self.queue_results.put((self.frame_no, "hits.0.label", str(label)))
+            metrics["hits.0.score"] = float(score)
+            metrics["hits.0.label"] = str(label)
             # yield float(score), str(label), [int(i) for i in bbox]
+        metrics.update(self.supplementary)
+        self.queue_results.put((self.frame_no, metrics))
+        logger.info(f"Processed frame {self.frame_no}")
+        # cleanup to preserve GPU memory
+        del inputs
+        del outputs
+        del results
+        gc.collect()
+        torch.cuda.empty_cache()
+
         return True
 
     def close(self) -> None:
