@@ -23,7 +23,7 @@ classifiers = [
 dependencies = [
   "opencv-python-headless",
   "ffmpeg-python",
-  "transformers",
+  "transformers","torch",
   "pillow",
   "seaborn"
 ]
