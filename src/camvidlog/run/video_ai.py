@@ -32,14 +32,14 @@ if __name__ == "__main__":
             rescaler = Rescaler(
                 info_input=file_reader.info_output,
                 queue_manager=q_manager,
-                x=Resolution.UHD.value[0],
-                y=Resolution.UHD.value[1],
+                x=vidstats.x,
+                y=vidstats.y,
                 fps_in=30,
                 fps_out=1,
             )
             ai_grounding_dino = GroundingDino(
                 info_input=rescaler.info_output,
-                queries=["animal"],
+                queries=["deer", "cat", "hedgehog", "fox"],
                 data_recorder=data_recorder,
                 model_id="IDEA-Research/grounding-dino-base",
                 box_threshold=0.1,

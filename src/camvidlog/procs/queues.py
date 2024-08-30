@@ -39,7 +39,7 @@ class SharedMemoryQueueManager:
     def __init__(self):
         self.queues = []
 
-    def make_queue(self, nbytes: int, size=2) -> SharedMemoryQueueResources:
+    def make_queue(self, nbytes: int, size=3) -> SharedMemoryQueueResources:
         queue = SharedMemoryQueueResources(nbytes, size)
         self.queues.append(queue)
         return queue

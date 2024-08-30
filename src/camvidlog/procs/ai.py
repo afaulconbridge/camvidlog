@@ -38,6 +38,7 @@ class GroundingDino(FrameConsumer):
         self.text_threshold = text_threshold
         self.supplementary = supplementary if supplementary else {}
         columns = (
+            "hits.count",
             "hits.0.score",
             "hits.0.label",
             *self.supplementary.keys(),
@@ -63,10 +64,11 @@ class GroundingDino(FrameConsumer):
         )[0]
         # score, label, bbox
         hits = tuple(zip(*results.values(), strict=False))
-        #        for i, hit in enumerate(hits):
-        #            score, label, bbox = hit
-        #            print((i, float(score), str(label)))
+        for i, hit in enumerate(hits):
+            score, label, bbox = hit
+            print((i, float(score), str(label)))
         metrics = {}
+        metrics["hits.count"] = len(hits)
         if hits:
             score, label, bbox = hits[0]
             metrics["hits.0.score"] = float(score)
@@ -75,6 +77,10 @@ class GroundingDino(FrameConsumer):
         metrics.update(self.supplementary)
         self.queue_results.put((self.frame_no, metrics))
         logger.info(f"Processed frame {self.frame_no}")
+
+        for key, value in sorted(metrics.items()):
+            logger.debug(f"{key} = {value}")
+
         # cleanup to preserve GPU memory
         del inputs
         del outputs
