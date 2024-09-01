@@ -61,11 +61,13 @@
 	// An array of Docker CLI arguments that should be used when running the container.
 	"runArgs": [
 		"--gpus=all",
-		"--shm-size=1073741824" //1gb
+		"--shm-size=1073741824", //1gb
+		"--privileged" // required to mount CIFS/SMB from within container
 	],
 	"containerEnv": {
 		"NVIDIA_DRIVER_CAPABILITIES": "all"
 	},
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": ".devcontainer/post-create.sh"
+	"postCreateCommand": ".devcontainer/post-create.sh",
+	"postStartCommand": ".devcontainer/post-start.sh"
 }
