@@ -93,6 +93,7 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
     _background_subtractor: cv2.BackgroundSubtractorMOG2 | None = None
     history: int
     var_threshold: int
+    output_image_filename = str
 
     def __init__(
         self,
@@ -100,10 +101,12 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
         queue_manager: SharedMemoryQueueManager,
         history: int = 500,
         var_threshold=16,
+        output_image_filename="",
     ):
         super().__init__(info_input=info_input, queue_manager=queue_manager)
         self.history = history
         self.var_threshold = var_threshold
+        self.output_image_filename = output_image_filename
 
         # always outputs greyscale
         self.info_output.colourspace = Colourspace.greyscale
@@ -115,6 +118,11 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
             )
         self._background_subtractor.apply(frame_in, frame_out)
         return True
+
+    def close(self) -> None:
+        if self.output_image_filename:
+            cv2.imwrite(self.output_image_filename, self._background_subtractor.getBackgroundImage())
+        super().close()
 
 
 class BackgroundSubtractorKNN(FrameConsumerProducer):
@@ -260,7 +268,7 @@ class Rescaler(FrameConsumerProducer):
 
     def process_frame(self, frame_in, frame_out) -> bool:
         if self.frame_no % self.fps_ratio < 1.0:
-            cv2.resize(frame_in, self.res, frame_out)
+            cv2.resize(frame_in, self.res, frame_out, interpolation=cv2.INTER_AREA)
             return True
         else:
             # skip frame

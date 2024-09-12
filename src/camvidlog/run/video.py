@@ -37,7 +37,7 @@ if __name__ == "__main__":
             data_recorder = DataRecorder(q_results, len(Resolution), f"{filename}.csv")
             ps.append(Process(target=data_recorder))
 
-            #file_reader = FileReader(queue_manager=q_manager, filename=filename)
+            # file_reader = FileReader(queue_manager=q_manager, filename=filename)
             file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
             ps.append(Process(target=file_reader))
 
@@ -53,7 +53,11 @@ if __name__ == "__main__":
                     fps_out=5,
                 )
                 background_subtractor = BackgroundSubtractorMOG2(
-                    info_input=rescaler.info_output, queue_manager=q_manager, history=500, var_threshold=16
+                    info_input=rescaler.info_output,
+                    queue_manager=q_manager,
+                    history=50,
+                    var_threshold=16,
+                    output_image_filename="background.png",
                 )
                 background_mask_denoiser = BackgroundMaskDenoiser(
                     info_input=background_subtractor.info_output, queue_manager=q_manager, kernel_size=3
