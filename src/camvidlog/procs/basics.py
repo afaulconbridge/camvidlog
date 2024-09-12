@@ -15,7 +15,7 @@ from camvidlog.procs.queues import SharedMemoryQueueManager, SharedMemoryQueueRe
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT = 180.0
+TIMEOUT = 600.0
 
 
 class Resolution(Enum):

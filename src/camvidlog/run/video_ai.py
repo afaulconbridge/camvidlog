@@ -2,7 +2,7 @@ import argparse
 import time
 from multiprocessing import Process, Queue
 
-from camvidlog.procs.ai import Clip, GroundingDino
+from camvidlog.procs.ai import Clip, ClipSplitter, GroundingDino
 from camvidlog.procs.basics import (
     DataRecorder,
     FFMPEGReader,
@@ -31,8 +31,10 @@ if __name__ == "__main__":
             rescaler = Rescaler(
                 info_input=file_reader.info_output,
                 queue_manager=q_manager,
-                x=336,  # vidstats.x,
-                y=336,  # vidstats.y,
+                # x=336,  # vidstats.x,
+                # y=336,  # vidstats.y,
+                x=vidstats.x,
+                y=vidstats.y,
                 fps_in=30,
                 fps_out=1,
             )
@@ -44,9 +46,10 @@ if __name__ == "__main__":
             #    box_threshold=0.1,
             #    text_threshold=0.1,
             # )
-            queries = ["deer", "cat", "hedgehog", "fox"]
-            queries = [f"greyscale photo of {q} at night" for q in queries]
-            ai_clip = Clip(
+            # queries = ["deer", "cat", "hedgehog", "fox", "empty garden", "empty lawn", "garden", "lawn"]
+            queries = ["deer", "cat", "hedgehog", "fox", "otter", "mink", "badger", "ferret", "rat", "mouse", "mole"]
+            # queries = [f"greyscale photo of {q} at night" for q in queries]
+            ai_clip = ClipSplitter(
                 info_input=rescaler.info_output,
                 queries=queries,
                 data_recorder=data_recorder,

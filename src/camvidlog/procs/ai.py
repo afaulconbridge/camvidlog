@@ -1,9 +1,11 @@
 import gc
 import logging
+from collections.abc import Generator
 from multiprocessing import Queue
 from typing import Any
 
 import torch
+from cv2.typing import MatLike
 from PIL import Image
 from transformers import (
     AutoModelForZeroShotObjectDetection,
@@ -131,6 +133,7 @@ class Clip(FrameConsumer):
         self.text_queries = queries
         self.model_id = model_id
         self.supplementary = supplementary if supplementary else {}
+        self.supplementary["model_id"] = model_id
         columns = ["score", "label"]
         columns.extend(self.supplementary.keys())
         self.queue_results = data_recorder.register(columns)
@@ -152,6 +155,8 @@ class Clip(FrameConsumer):
             text=self.text_queries,
             images=image_pillow,
             return_tensors="pt",
+            padding=True,
+            truncation=True,
         ).to("cuda")
         outputs = self.model(**inputs)
         logits_per_image = outputs.logits_per_image  # this is the image-text similarity score
@@ -162,6 +167,104 @@ class Clip(FrameConsumer):
             metrics = {"label": label, "score": score}
             metrics.update(self.supplementary)
             self.queue_results.put((self.frame_no, metrics))
+        logger.info(f"Processed frame {self.frame_no}")
+
+        return True
+
+    def close(self) -> None:
+        super().close()
+
+        self.queue_results.put(None)
+
+
+class ClipSplitter(FrameConsumer):
+    """
+    CLIP is a transformer model. It maps image and the given text labels into the same latent space
+    and then compares distance.
+
+    Text is tokenized into word roots (kinda)
+    Image is chopped into small size chunks (typically 224x224x3) then split into patches (14 or 16 or 32) to
+    generate tokens.
+    """
+
+    processor: CLIPProcessor
+    text_queries: str
+    processor_input_ids: Any
+    queue_results: Queue
+
+    def __init__(
+        self,
+        info_input: FrameQueueInfoOutput,
+        queries: tuple[str, ...],
+        data_recorder: DataRecorder,
+        model_id: str,
+        supplementary: dict[str, str] | None = None,
+    ):
+        super().__init__(
+            info_input=info_input,
+        )
+        # will only accept a single string
+        self.text_queries = queries
+        self.model_id = model_id
+        self.supplementary = supplementary if supplementary else {}
+        self.supplementary["model_id"] = model_id
+        columns = ["score", "label", "i", "j", "subsize"]
+        columns.extend(self.supplementary.keys())
+        self.queue_results = data_recorder.register(columns)
+
+    def setup(self) -> None:
+        self.processor = CLIPProcessor.from_pretrained(self.model_id)
+        # process the text input now, as it doesn't change frame-to-frame
+        self.processor_input_ids = self.processor(
+            text=self.text_queries,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        ).to("cuda")
+        self.model = CLIPModel.from_pretrained(self.model_id).to("cuda")
+
+    def _split(self, frame_in: MatLike, subsize=336) -> Generator[tuple[tuple[int, int], MatLike], None, None]:
+        y, x, _ = frame_in.shape
+        # for each quadrant
+        # work out size to fill
+        gap_x = (x // 2) + (subsize // 2)
+        gap_y = (y // 2) + (subsize // 2)
+        count_x = (gap_x // subsize) + 1
+        count_y = (gap_y // subsize) + 1
+        patch_gap_x = gap_x // count_x
+        patch_gap_y = gap_y // count_y
+
+        for i in range(count_x + count_x - 1):
+            for j in range(count_y + count_y - 1):
+                offset_x = patch_gap_x * i
+                offset_y = patch_gap_y * j
+                subimage = frame_in[offset_y : offset_y + subsize, offset_x : offset_x + subsize]
+                yield (i, j), subimage
+
+    def process_frame(self, frame_in) -> None:
+        for subsize in (0, 336 * 4, 336 * 2):  # , 336
+            if subsize == 0:
+                frame_splits = [((0, 0), frame_in)]
+            else:
+                frame_splits = self._split(frame_in, subsize)
+
+            for (i, j), frame_split in frame_splits:
+                inputs = self.processor(
+                    text=self.text_queries,
+                    images=frame_split,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                ).to("cuda")
+                outputs = self.model(**inputs)
+                logits_per_image = outputs.logits_per_image  # this is the image-text similarity score
+                probs = logits_per_image.softmax(dim=1)  # we can take the softmax to get the label probabilities
+                results = dict(zip(self.text_queries, tuple(float(i) for i in probs[0]), strict=False))
+
+                for label, score in results.items():
+                    metrics = {"label": label, "score": score, "i": i, "j": j, "subsize": subsize}
+                    metrics.update(self.supplementary)
+                    self.queue_results.put((self.frame_no, metrics))
         logger.info(f"Processed frame {self.frame_no}")
 
         return True

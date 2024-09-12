@@ -16,11 +16,12 @@ if __name__ == "__main__":
         filename_out = filename_video + ".png"
         data = pd.read_csv(filename_video + ".csv")
         data_ai = pd.read_csv(filename_video + ".ai.csv")
+        data_ai_grouped = data_ai.groupby(["frame_no", "label", "model_id"], as_index=False).max()
 
         fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1)
 
-        sns.lineplot(data_ai, x="frame_no", y="score", style="label", hue="label", ax=ax1)
-        ax1.set_ylim(0, 1)
+        sns.lineplot(data_ai_grouped, x="frame_no", y="score", style="label", hue="label", ax=ax1)
+        # ax1.set_ylim(0, 1)
         ax1.set_xlim(0, 900)
 
         sns.lineplot(data, x="frame_no", y="mask.mean", style="res", hue="res", ax=ax2)
