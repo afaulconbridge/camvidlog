@@ -4,6 +4,7 @@ from collections.abc import Generator
 from multiprocessing import Queue
 from typing import Any
 
+import open_clip
 import torch
 from cv2.typing import MatLike
 from PIL import Image
@@ -162,6 +163,69 @@ class Clip(FrameConsumer):
         logits_per_image = outputs.logits_per_image  # this is the image-text similarity score
         probs = logits_per_image.softmax(dim=1)  # we can take the softmax to get the label probabilities
         results = dict(zip(self.text_queries, tuple(float(i) for i in probs[0]), strict=False))
+
+        for label, score in results.items():
+            metrics = {"label": label, "score": score}
+            metrics.update(self.supplementary)
+            self.queue_results.put((self.frame_no, metrics))
+        logger.info(f"Processed frame {self.frame_no}")
+
+        return True
+
+    def close(self) -> None:
+        super().close()
+
+        self.queue_results.put(None)
+
+
+class OpenClip(FrameConsumer):
+    """
+    OpenClip is library for Clip transformer model. It maps image and the given text labels into the same latent space
+    and then compares distance.
+
+    Text is tokenized into word roots (kinda)
+    Image is resized to a small size (typically 224x224x3) and then split into even smaller patches (14 or 16 or 32) to
+    generate tokens.
+    """
+
+    processor: CLIPProcessor
+    text_queries: str
+    processor_input_ids: Any
+    queue_results: Queue
+
+    def __init__(
+        self,
+        info_input: FrameQueueInfoOutput,
+        queries: tuple[str, ...],
+        data_recorder: DataRecorder,
+        supplementary: dict[str, str] | None = None,
+    ):
+        super().__init__(
+            info_input=info_input,
+        )
+        self.text_queries = queries
+        self.model_id = "imageomics/bioclip"
+        self.supplementary = supplementary if supplementary else {}
+        self.supplementary["model_id"] = self.model_id
+        columns = ["score", "label"]
+        columns.extend(self.supplementary.keys())
+        self.queue_results = data_recorder.register(columns)
+
+    def setup(self) -> None:
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip")
+        self.model.eval()
+        tokenizer = open_clip.get_tokenizer("hf-hub:imageomics/bioclip")
+        with torch.no_grad():
+            self.text_features = self.model.encode_text(tokenizer(self.text_queries))
+            self.text_features /= self.text_features.norm(dim=-1, keepdim=True)
+
+    def process_frame(self, frame_in) -> None:
+        with torch.no_grad():
+            image_features = self.model.encode_image(self.preprocess(Image.fromarray(frame_in)).unsqueeze(0))
+            image_features /= image_features.norm(dim=-1, keepdim=True)
+            image_features = image_features.clone().detach()
+            text_probs = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
+            results = dict(zip(self.text_queries, [float(i) for i in text_probs[0]], strict=True))
 
         for label, score in results.items():
             metrics = {"label": label, "score": score}
