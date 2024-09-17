@@ -268,7 +268,7 @@ class Rescaler(FrameConsumerProducer):
 
     def process_frame(self, frame_in, frame_out) -> bool:
         if self.frame_no % self.fps_ratio < 1.0:
-            cv2.resize(frame_in, self.res, frame_out, interpolation=cv2.INTER_AREA)
+            cv2.resize(frame_in, self.res, frame_out, interpolation=cv2.INTER_LANCZOS4)
             return True
         else:
             # skip frame
