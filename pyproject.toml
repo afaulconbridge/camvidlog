@@ -23,9 +23,12 @@ classifiers = [
 dependencies = [
   "opencv-python-headless",
   "ffmpeg-python",
-  "transformers","torch",
+  "transformers",
+  "torch",
+  "optimum",
   "pillow",
-  "seaborn"
+  "seaborn",
+  "open_clip_torch",
 ]
 
 [dirs.env]
@@ -49,7 +52,7 @@ cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
 [[tool.hatch.envs.all.matrix]]
-python = [ "3.11"]
+python = ["3.11"]
 
 [tool.hatch.envs.lint]
 detached = true
