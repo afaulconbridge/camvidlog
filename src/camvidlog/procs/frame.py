@@ -256,20 +256,23 @@ class Rescaler(FrameConsumerProducer):
         info_input: FrameQueueInfoOutput,
         queue_manager: SharedMemoryQueueManager,
     ):
-        super().__init__(info_input=info_input, queue_manager=queue_manager)
         self.res = (x, y)
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
         if fps_out > fps_in:
             msg = "fps_out cannot be greater than fps_in"
             raise ValueError(msg)
         self.fps_ratio = fps_in / fps_out
 
-        # override default input-based output information from parent class
-        self.info_output = FrameQueueInfoOutput(self.queue_resources.queue, x, y, info_input.colourspace)
-
     def process_frame(self, frame_in, frame_out) -> bool:
         if self.frame_no % self.fps_ratio < 1.0:
-            cv2.resize(frame_in, self.res, frame_out, interpolation=cv2.INTER_LANCZOS4)
+            cv2.resize(frame_in, self.res, frame_out)  # , interpolation=cv2.INTER_LANCZOS4)
             return True
         else:
             # skip frame
             return False
+
+    def _get_nbytes(self) -> int:
+        return self.res[0] * self.res[1] * 3  # TODO not assume colour
+
+    def _get_x_y(self) -> tuple[int, int]:
+        return (self.res[0], self.res[1])
