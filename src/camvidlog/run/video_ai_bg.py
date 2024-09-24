@@ -28,26 +28,35 @@ if __name__ == "__main__":
 
             # file_reader = FileReader(queue_manager=q_manager, filename=filename)
             file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
-            rescaler = Rescaler(
+            rescaler_down = Rescaler(
                 info_input=file_reader.info_output,
                 queue_manager=q_manager,
-                x=vidstats.x,
-                y=vidstats.y,
+                x=1024,
+                y=1024,
                 fps_in=30,
                 fps_out=1,
             )
 
-            bgrem = BiRefNet(info_input=rescaler.info_output, queue_manager=q_manager)
+            bgrem = BiRefNet(info_input=rescaler_down.info_output, queue_manager=q_manager)
+
+            rescaler_up = Rescaler(
+                info_input=bgrem.info_output,
+                queue_manager=q_manager,
+                x=vidstats.x,
+                y=vidstats.y,
+                fps_in=1,
+                fps_out=1,
+            )
 
             # TODO crop
             # TODO identify
 
-            save_to_file = FFMPEGToFile(f"{filename}.bgrem.mp4", 1, bgrem.info_output)
-
+            save_to_file = FFMPEGToFile(f"{filename}.bgrem.mp4", 1, rescaler_up.info_output)
             ps = []
             ps.append(Process(target=file_reader))
-            ps.append(Process(target=rescaler))
+            ps.append(Process(target=rescaler_down))
             ps.append(Process(target=bgrem))
+            ps.append(Process(target=rescaler_up))
             ps.append(Process(target=save_to_file))
 
             starttime = time.time()
