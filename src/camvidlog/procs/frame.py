@@ -120,7 +120,7 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
         return True
 
     def close(self) -> None:
-        if self.output_image_filename:
+        if self.output_image_filename and self._background_subtractor:
             cv2.imwrite(self.output_image_filename, self._background_subtractor.getBackgroundImage())
         super().close()
 
