@@ -4,11 +4,14 @@ from collections.abc import Generator
 from multiprocessing import Queue
 from typing import Any
 
+import numpy as np
 import open_clip
 import torch
 from cv2.typing import MatLike
 from PIL import Image
+from torchvision import transforms
 from transformers import (
+    AutoModelForImageSegmentation,
     AutoModelForZeroShotObjectDetection,
     AutoProcessor,
     CLIPModel,
@@ -16,7 +19,8 @@ from transformers import (
     GroundingDinoProcessor,
 )
 
-from camvidlog.procs.basics import DataRecorder, FrameConsumer, FrameQueueInfoOutput
+from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.procs.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
 
@@ -337,3 +341,60 @@ class ClipSplitter(FrameConsumer):
         super().close()
 
         self.queue_results.put(None)
+
+
+class BiRefNet(FrameConsumerProducer):
+    """
+    BiRefNet is for generating a mask of foreground objects for background removal
+
+    Input is a 1024x1024 image
+    Output is a boolean mask
+    """
+
+    processor: Any
+    model_id: str
+
+    def __init__(
+        self,
+        info_input: FrameQueueInfoOutput,
+        queue_manager: SharedMemoryQueueManager,
+        model_id: str = "ZhengPeng7/BiRefNet",
+    ):
+        super().__init__(info_input=info_input, queue_manager=queue_manager)
+        # if info_input.x != 1024 or info_input.y != 1024:
+        #    msg = "Input image must be 1024x1024"
+        #    raise RuntimeError(msg)
+        # will only accept a single string
+        self.model_id = model_id
+        # always outputs boolean
+        self.info_output.colourspace = Colourspace.greyscale
+
+    def setup(self) -> None:
+        self.processor = AutoModelForImageSegmentation.from_pretrained("ZhengPeng7/BiRefNet", trust_remote_code=True)
+        torch.set_float32_matmul_precision(["high", "highest"][0])
+        self.processor.to("cuda")
+        self.processor.eval()
+
+    def process_frame(self, frame_in: np.ndarray, frame_out: np.ndarray) -> bool:
+        image = Image.frombytes("RGB", (self.info_input.x, self.info_input.y), frame_in).convert("RGB")
+        image_size = (1024, 1024)
+        transform_image = transforms.Compose(
+            [
+                transforms.Resize(image_size),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
+        input_images = transform_image(image)
+        input_images = input_images.unsqueeze(0).to("cuda")
+
+        # Prediction
+        with torch.no_grad():
+            preds = self.processor(input_images)[-1].sigmoid().cpu()
+        pred = preds[0].squeeze()
+        pred_pil = transforms.ToPILImage()(pred).convert("L")
+        image_mask = pred_pil.resize((self.info_input.x, self.info_input.y))
+        image_out = Image.composite(image, Image.new("L", image.size), image_mask)
+        np_out = np.expand_dims(image_out, axis=2)
+        np.copyto(frame_out, np_out)
+        return True
