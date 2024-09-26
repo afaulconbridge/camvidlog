@@ -43,8 +43,9 @@ if __name__ == "__main__":
             background_subtractor = BackgroundSubtractorMOG2(
                 info_input=rescaler.info_output,
                 queue_manager=q_manager,
-                history=5000000,
+                history=900,
                 var_threshold=5,
+                output_image_filename=f"{filename}.bg.mog2.jpg",
             )
             background_mask_denoiser = BackgroundMaskDenoiser(
                 info_input=background_subtractor.info_output, queue_manager=q_manager, kernel_size=5
