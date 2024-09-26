@@ -224,8 +224,10 @@ class OpenClip(FrameConsumer):
             self.text_features /= self.text_features.norm(dim=-1, keepdim=True)
 
     def process_frame(self, frame_in) -> None:
+        frame_pil = Image.fromarray(frame_in.squeeze())
+        # cropped = frame_pil.crop(frame_pil.getbbox())
         with torch.no_grad():
-            image_features = self.model.encode_image(self.preprocess(Image.fromarray(frame_in)).unsqueeze(0))
+            image_features = self.model.encode_image(self.preprocess(frame_pil).unsqueeze(0))
             image_features /= image_features.norm(dim=-1, keepdim=True)
             image_features = image_features.clone().detach()
             text_probs = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
@@ -388,7 +390,6 @@ class BiRefNet(FrameConsumerProducer):
         image = Image.frombytes("RGB", (self.info_input.x, self.info_input.y), frame_in)
 
         image_out = Image.composite(image, Image.new("L", image.size), pred_pil)
-
         np_out = np.expand_dims(image_out, axis=2)
         np.copyto(frame_out, np_out)
         return True
