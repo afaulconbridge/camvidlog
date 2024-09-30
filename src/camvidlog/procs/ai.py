@@ -4,9 +4,11 @@ from collections.abc import Generator
 from multiprocessing import Queue
 from typing import Any
 
+import cv2
 import numpy as np
 import open_clip
 import torch
+import torch.nn.functional as F
 from cv2.typing import MatLike
 from PIL import Image
 from torchvision import transforms
@@ -196,6 +198,7 @@ class OpenClip(FrameConsumer):
     text_queries: str
     processor_input_ids: Any
     queue_results: Queue
+    background_subtractor: cv2.BackgroundSubtractor | None = None
 
     def __init__(
         self,
@@ -211,27 +214,43 @@ class OpenClip(FrameConsumer):
         self.model_id = "imageomics/bioclip"
         self.supplementary = supplementary if supplementary else {}
         self.supplementary["model_id"] = self.model_id
+        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
+            history=900, detectShadows=False
+        )  # TODO customize
+
         columns = ["score", "label"]
         columns.extend(self.supplementary.keys())
         self.queue_results = data_recorder.register(columns)
 
     def setup(self) -> None:
-        self.model, _, self.preprocess = open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip")
+        self.model, _, self.processor = open_clip.create_model_and_transforms(
+            "hf-hub:imageomics/bioclip",
+            device=torch.device("cuda"),
+        )
         self.model.eval()
-        tokenizer = open_clip.get_tokenizer("hf-hub:imageomics/bioclip")
+        tokenizer = open_clip.get_tokenizer(
+            "hf-hub:imageomics/bioclip",
+        )
         with torch.no_grad():
-            self.text_features = self.model.encode_text(tokenizer(self.text_queries))
-            self.text_features /= self.text_features.norm(dim=-1, keepdim=True)
+            self.text_features = F.normalize(self.model.encode_text(tokenizer(self.text_queries).to("cuda")), dim=-1)
 
     def process_frame(self, frame_in) -> None:
+        self.background_subtractor.apply(frame_in)
         frame_pil = Image.fromarray(frame_in.squeeze())
+        bg_pil = Image.fromarray(self.background_subtractor.getBackgroundImage().squeeze())
         # cropped = frame_pil.crop(frame_pil.getbbox())
         with torch.no_grad():
-            image_features = self.model.encode_image(self.preprocess(frame_pil).unsqueeze(0))
-            image_features /= image_features.norm(dim=-1, keepdim=True)
+            image_features = F.normalize(
+                self.model.encode_image(self.processor(frame_pil).to("cuda").unsqueeze(0)), dim=-1
+            )
             image_features = image_features.clone().detach()
-            text_probs = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
-            results = dict(zip(self.text_queries, [float(i) for i in text_probs[0]], strict=True))
+
+            bg_features = F.normalize(self.model.encode_image(self.processor(bg_pil).to("cuda").unsqueeze(0)), dim=-1)
+            bg_features = bg_features.clone().detach()
+
+            text_bg_features = torch.concat([self.text_features, bg_features])
+            text_probs = (image_features @ text_bg_features.T).softmax(dim=-1)
+            results = dict(zip((*self.text_queries, "[background]"), [float(i) for i in text_probs[0]], strict=True))
 
         for label, score in results.items():
             metrics = {"label": label, "score": score}
