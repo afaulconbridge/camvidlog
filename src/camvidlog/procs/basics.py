@@ -29,6 +29,7 @@ class Resolution(Enum):
 class Colourspace(Enum):
     RGB = "rgb"
     greyscale = "greyscale"
+    mask = "mask"
 
 
 @dataclass
@@ -291,10 +292,10 @@ class FrameConsumer:
         super().__init__(**kwargs)
 
     def __call__(self):
+        shared_memory: dict[str, SharedMemory] = {}
+        shared_array: dict[str, np.ndarray] = {}
         try:
             self.setup()
-            shared_memory: dict[str, SharedMemory] = {}
-            shared_array: dict[str, np.ndarray] = {}
 
             while item := self.info_input.queue.get(timeout=TIMEOUT):
                 shared_memory_name, frame_no, frame_time = item
