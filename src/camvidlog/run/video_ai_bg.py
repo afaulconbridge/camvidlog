@@ -34,30 +34,46 @@ if __name__ == "__main__":
                 x=1024,
                 y=1024,
                 fps_in=30,
-                fps_out=1,
+                fps_out=4,
             )
 
             bgrem = BiRefNet(info_input=rescaler_down.info_output, queue_manager=q_manager)
 
-            rescaler_up = Rescaler(
+            # rescaler_up = Rescaler(
+            #    info_input=bgrem.info_output,
+            #    queue_manager=q_manager,
+            #    x=vidstats.x,
+            #    y=vidstats.y,
+            #    fps_in=1,
+            #    fps_out=1,
+            # )
+
+            # TODO crop (part of OpenClip)
+            # identify
+            mammalia = "Eukaryota Animalia Chordata Mammalia"
+            queries = [
+                mammalia + " Artiodactyla Cervidae Cervinae Muntiacini Muntiacus (muntjac deer)",
+                mammalia + " Carnivora Feliformia Felidae Felinae Felis Felis catus (domestic cat)",
+                mammalia + " Eulipotyphla Erinaceidae Erinaceus Erinaceus europaeus (European hedgehog)",
+                mammalia + " Carnivora Canidae Vulpes Vulpes vulpes (red fox)",
+                mammalia + " Carnivora Mustelidae Mustela Mustela furo (domestic ferret)",
+            ]
+            ai_clip = OpenClip(
                 info_input=bgrem.info_output,
-                queue_manager=q_manager,
-                x=vidstats.x,
-                y=vidstats.y,
-                fps_in=1,
-                fps_out=1,
+                queries=queries,
+                data_recorder=data_recorder,
+                supplementary={"bgrem": "yes"},
             )
 
-            # TODO crop
-            # TODO identify
-
-            save_to_file = FFMPEGToFile(f"{filename}.bgrem.mp4", 1, rescaler_up.info_output)
+            # save_to_file = FFMPEGToFile(f"{filename}.bgrem.mp4", 1, rescaler_up.info_output)
             ps = []
             ps.append(Process(target=file_reader))
             ps.append(Process(target=rescaler_down))
             ps.append(Process(target=bgrem))
-            ps.append(Process(target=rescaler_up))
-            ps.append(Process(target=save_to_file))
+            ps.append(Process(target=ai_clip))
+            ps.append(Process(target=data_recorder))
+            # ps.append(Process(target=rescaler_up))
+            # ps.append(Process(target=save_to_file))
 
             starttime = time.time()
 
