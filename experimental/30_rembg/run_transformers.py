@@ -1,4 +1,6 @@
 # Load BiRefNet with weights
+import time
+
 import ffmpeg
 import torch
 from PIL import Image
@@ -20,15 +22,19 @@ def extract_object(birefnet, image: Image):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]
     )
-    input_images = transform_image(image).unsqueeze(0).to("cuda")
+    input_images = transform_image(image)
+    start = time.time()
+    input_images = input_images.unsqueeze(0).to("cuda")
 
     # Prediction
     with torch.no_grad():
         preds = birefnet(input_images)[-1].sigmoid().cpu()
     pred = preds[0].squeeze()
+    end = time.time()
     pred_pil = transforms.ToPILImage()(pred)
     image_mask = pred_pil.resize(image.size)
     image_out = Image.composite(image, Image.new("RGB", image.size), image_mask)
+    print(f"Ran in {end-start:0.2f}s")
     return image_out, image_mask
 
 
