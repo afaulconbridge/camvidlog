@@ -238,7 +238,8 @@ class OpenClip(FrameConsumer):
         self.background_subtractor.apply(frame_in)
         frame_pil = Image.fromarray(frame_in.squeeze())
         bg_pil = Image.fromarray(self.background_subtractor.getBackgroundImage().squeeze())
-        # cropped = frame_pil.crop(frame_pil.getbbox())
+        # bg_pil = Image.new("L", frame_pil.size)
+        # frame_pil = frame_pil.crop(frame_pil.getbbox())
         with torch.no_grad():
             image_features = F.normalize(
                 self.model.encode_image(self.processor(frame_pil).to("cuda").unsqueeze(0)), dim=-1
@@ -248,9 +249,10 @@ class OpenClip(FrameConsumer):
             bg_features = F.normalize(self.model.encode_image(self.processor(bg_pil).to("cuda").unsqueeze(0)), dim=-1)
             bg_features = bg_features.clone().detach()
 
-            text_bg_features = torch.concat([self.text_features, bg_features])
-            text_probs = (image_features @ text_bg_features.T).softmax(dim=-1)
-            results = dict(zip((*self.text_queries, "[background]"), [float(i) for i in text_probs[0]], strict=True))
+            image_text_probs = image_features @ self.text_features.T
+            bg_text_probs = bg_features @ self.text_features.T
+            text_probs = (image_text_probs / bg_text_probs).softmax(dim=-1)
+            results = dict(zip(self.text_queries, [float(i) for i in text_probs[0]], strict=True))
 
         for label, score in results.items():
             metrics = {"label": label, "score": score}
