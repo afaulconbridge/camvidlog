@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 from multiprocessing import Process, Queue
 
@@ -10,6 +11,8 @@ from camvidlog.procs.basics import (
 )
 from camvidlog.procs.frame import Rescaler
 from camvidlog.procs.queues import SharedMemoryQueueManager
+
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -100,3 +103,4 @@ if __name__ == "__main__":
                 p.join()
 
             endtime = time.time()
+            logger.info(f"Runtime: {endtime-starttime:0.2f}")
