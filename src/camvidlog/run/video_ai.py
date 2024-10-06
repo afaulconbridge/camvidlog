@@ -10,7 +10,7 @@ from camvidlog.procs.basics import (
     peek_in_file,
 )
 from camvidlog.procs.frame import Rescaler
-from camvidlog.procs.queues import SharedMemoryQueueManager
+from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
 

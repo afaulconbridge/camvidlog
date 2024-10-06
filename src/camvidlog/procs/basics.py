@@ -11,7 +11,7 @@ import cv2
 import ffmpeg
 import numpy as np
 
-from camvidlog.procs.queues import SharedMemoryQueueManager, SharedMemoryQueueResources
+from camvidlog.queues import SharedMemoryQueueManager, SharedMemoryQueueResources
 
 logger = logging.getLogger(__name__)
 

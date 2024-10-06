@@ -22,7 +22,7 @@ from transformers import (
 )
 
 from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
-from camvidlog.procs.queues import SharedMemoryQueueManager
+from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
 

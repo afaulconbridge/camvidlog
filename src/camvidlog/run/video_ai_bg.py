@@ -9,7 +9,7 @@ from camvidlog.procs.basics import (
     peek_in_file,
 )
 from camvidlog.procs.frame import FFMPEGToFile, Rescaler
-from camvidlog.procs.queues import SharedMemoryQueueManager
+from camvidlog.queues import SharedMemoryQueueManager
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

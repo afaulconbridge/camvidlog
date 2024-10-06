@@ -18,7 +18,7 @@ from camvidlog.procs.frame import (
     Rescaler,
     SaveToFile,
 )
-from camvidlog.procs.queues import SharedMemoryQueueManager
+from camvidlog.queues import SharedMemoryQueueManager
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
