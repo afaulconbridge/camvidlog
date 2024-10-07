@@ -1,12 +1,13 @@
 import logging
-from multiprocessing import Queue
+from collections.abc import Generator
 from subprocess import Popen
 
 import cv2
 import ffmpeg
 import numpy as np
+from cv2.typing import MatLike
 
-from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.procs.basics import Colourspace, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
 from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
@@ -122,3 +123,22 @@ class Rescaler(FrameConsumerProducer):
 
     def _get_x_y(self) -> tuple[int, int]:
         return (self.res[0], self.res[1])
+
+
+def split_frame(frame_in: MatLike, subsize=336) -> Generator[tuple[tuple[int, int], MatLike], None, None]:
+    y, x, _ = frame_in.shape
+    # for each quadrant
+    # work out size to fill
+    gap_x = (x // 2) + (subsize // 2)
+    gap_y = (y // 2) + (subsize // 2)
+    count_x = (gap_x // subsize) + 1
+    count_y = (gap_y // subsize) + 1
+    patch_gap_x = gap_x // count_x
+    patch_gap_y = gap_y // count_y
+
+    for i in range(count_x + count_x - 1):
+        for j in range(count_y + count_y - 1):
+            offset_x = patch_gap_x * i
+            offset_y = patch_gap_y * j
+            subimage = frame_in[offset_y : offset_y + subsize, offset_x : offset_x + subsize]
+            yield (i, j), subimage

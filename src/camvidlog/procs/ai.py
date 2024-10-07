@@ -1,6 +1,5 @@
 import gc
 import logging
-from collections.abc import Generator
 from multiprocessing import Queue
 from typing import Any
 
@@ -9,7 +8,6 @@ import numpy as np
 import open_clip
 import torch
 import torch.nn.functional as F
-from cv2.typing import MatLike
 from PIL import Image
 from torchvision import transforms
 from transformers import (
@@ -22,6 +20,7 @@ from transformers import (
 )
 
 from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.procs.frame import split_frame
 from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
@@ -314,30 +313,12 @@ class ClipSplitter(FrameConsumer):
         ).to("cuda")
         self.model = CLIPModel.from_pretrained(self.model_id).to("cuda")
 
-    def _split(self, frame_in: MatLike, subsize=336) -> Generator[tuple[tuple[int, int], MatLike], None, None]:
-        y, x, _ = frame_in.shape
-        # for each quadrant
-        # work out size to fill
-        gap_x = (x // 2) + (subsize // 2)
-        gap_y = (y // 2) + (subsize // 2)
-        count_x = (gap_x // subsize) + 1
-        count_y = (gap_y // subsize) + 1
-        patch_gap_x = gap_x // count_x
-        patch_gap_y = gap_y // count_y
-
-        for i in range(count_x + count_x - 1):
-            for j in range(count_y + count_y - 1):
-                offset_x = patch_gap_x * i
-                offset_y = patch_gap_y * j
-                subimage = frame_in[offset_y : offset_y + subsize, offset_x : offset_x + subsize]
-                yield (i, j), subimage
-
     def process_frame(self, frame_in) -> None:
         for subsize in (0, 336 * 4, 336 * 2):  # , 336
             if subsize == 0:
                 frame_splits = [((0, 0), frame_in)]
             else:
-                frame_splits = self._split(frame_in, subsize)
+                frame_splits = split_frame(frame_in, subsize)
 
             for (i, j), frame_split in frame_splits:
                 inputs = self.processor(
