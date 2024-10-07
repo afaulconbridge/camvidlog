@@ -217,7 +217,7 @@ class OpenClip(FrameConsumer):
             history=900, detectShadows=False
         )  # TODO customize
 
-        columns = ["score", "label"]
+        columns = ["score", "label", "i", "j"]
         columns.extend(self.supplementary.keys())
         self.queue_results = data_recorder.register(columns)
 
@@ -234,31 +234,44 @@ class OpenClip(FrameConsumer):
             self.text_features = F.normalize(self.model.encode_text(tokenizer(self.text_queries).to("cuda")), dim=-1)
 
     def process_frame(self, frame_in) -> None:
+        # TODO move this to a separate process
         self.background_subtractor.apply(frame_in)
-        frame_pil = Image.fromarray(frame_in.squeeze())
-        bg_pil = Image.fromarray(self.background_subtractor.getBackgroundImage().squeeze())
-        # bg_pil = Image.new("L", frame_pil.size)
-        # frame_pil = frame_pil.crop(frame_pil.getbbox())
-        with torch.no_grad():
-            image_features = F.normalize(
-                self.model.encode_image(self.processor(frame_pil).to("cuda").unsqueeze(0)), dim=-1
-            )
-            image_features = image_features.clone().detach()
 
-            bg_features = F.normalize(self.model.encode_image(self.processor(bg_pil).to("cuda").unsqueeze(0)), dim=-1)
-            bg_features = bg_features.clone().detach()
+        for ((i, j), sub_frame), ((i2, j2), sub_bg) in zip(
+            split_frame(frame_in=frame_in, subsize=384),
+            split_frame(frame_in=self.background_subtractor.getBackgroundImage(), subsize=384),
+            strict=True,
+        ):
+            assert i == i2
+            assert j == j2
 
-            image_text_probs = image_features @ self.text_features.T
-            bg_text_probs = bg_features @ self.text_features.T
-            text_probs = (image_text_probs / bg_text_probs).softmax(dim=-1)
-            results = dict(zip(self.text_queries, [float(i) for i in text_probs[0]], strict=True))
+            frame_pil = Image.fromarray(sub_frame.squeeze())
+            bg_pil = Image.fromarray(sub_bg.squeeze())
 
-        for label, score in results.items():
-            metrics = {"label": label, "score": score}
-            metrics.update(self.supplementary)
-            self.queue_results.put((self.frame_no, metrics))
+            with torch.no_grad():
+                image_features = F.normalize(
+                    self.model.encode_image(self.processor(frame_pil).to("cuda").unsqueeze(0)), dim=-1
+                )
+                image_features = image_features.clone().detach()
+
+                bg_features = F.normalize(
+                    self.model.encode_image(self.processor(bg_pil).to("cuda").unsqueeze(0)), dim=-1
+                )
+                bg_features = bg_features.clone().detach()
+
+                image_text_probs = image_features @ self.text_features.T
+                bg_text_probs = bg_features @ self.text_features.T
+                text_probs = (image_text_probs / bg_text_probs).softmax(dim=-1)
+                results = dict(zip(self.text_queries, [float(i) for i in text_probs[0]], strict=True))
+
+            for label, score in results.items():
+                metrics = {"label": label, "score": score, "i": i, "j": j}
+                metrics.update(self.supplementary)
+                self.queue_results.put((self.frame_no, metrics))
+
+            logger.info(f"Processed frame {self.frame_no} sub {i}x{j}")
+
         logger.info(f"Processed frame {self.frame_no}")
-
         return True
 
     def close(self) -> None:

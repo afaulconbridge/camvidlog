@@ -38,11 +38,9 @@ if __name__ == "__main__":
                 # y=336, # openai/clip-vit-large-patch14-336
                 # x=384, # bioclip / vit-b/16
                 # y=384, # bioclip / vit-b/16
-                x=384,
-                y=384,
                 # slicer
-                # x=vidstats.x,
-                # y=vidstats.y,
+                x=vidstats.x,
+                y=vidstats.y,
                 fps_in=30,
                 fps_out=5,
             )
