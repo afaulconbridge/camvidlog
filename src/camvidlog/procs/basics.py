@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from csv import DictWriter
 from dataclasses import dataclass
 from enum import Enum
-from multiprocessing import Queue
+from multiprocessing import JoinableQueue, Queue
 from multiprocessing.shared_memory import SharedMemory
 from subprocess import Popen
 
@@ -34,7 +34,7 @@ class Colourspace(Enum):
 
 @dataclass
 class FrameQueueInfoOutput:
-    queue: Queue
+    queue: JoinableQueue
     x: int
     y: int
     colourspace: Colourspace
@@ -307,7 +307,10 @@ class FrameConsumer:
                         self.info_input.shape, dtype=np.uint8, buffer=shared_memory[shared_memory_name].buf
                     )
                 self.process_frame(shared_array[shared_memory_name])
+                self.info_input.queue.task_done()
                 logger.debug(f"{self} consumed {frame_no:4d}")
+            # "done" the sentinel
+            self.info_input.queue.task_done()
         finally:
             self.close()
 
@@ -369,6 +372,7 @@ class FrameConsumerProducer(FrameConsumer, FrameProducer):
                     shared_array_in[shared_memory_name_in],
                     shared_array_out[shared_pointer],
                 )
+                self.info_input.queue.task_done()
                 logger.debug(f"{self} consumed {frame_no:4d}")
 
                 if has_output:
@@ -381,6 +385,8 @@ class FrameConsumerProducer(FrameConsumer, FrameProducer):
                         shared_pointer = len(shared_memory_names) - 1
                     else:
                         shared_pointer -= 1
+            # "done" the sentinel
+            self.info_input.queue.task_done()
         finally:
             self.close()
 
@@ -452,7 +458,9 @@ class FrameCopier(FrameConsumerProducer):
                         self.info_input.shape, dtype=np.uint8, buffer=shared_memory_in[shared_memory_name_in].buf
                     )
 
+                self.info_input.queue.task_done()
                 logger.debug(f"{self} consumed {frame_no:4d}")
+
                 for shared_array_out_inner in shared_array_out:
                     np.copyto(shared_array_out_inner[shared_pointer], shared_array_in[shared_memory_name_in])
 
@@ -466,6 +474,8 @@ class FrameCopier(FrameConsumerProducer):
                     shared_pointer = len(self.queue_resourcess[0].shared_memory_names) - 1
                 else:
                     shared_pointer -= 1
+            # "done" the sentinel
+            self.info_input.queue.task_done()
         finally:
             self.close()
 

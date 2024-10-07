@@ -1,19 +1,19 @@
 import logging
-from multiprocessing import Queue
+from multiprocessing import JoinableQueue
 from multiprocessing.shared_memory import SharedMemory
 
 logger = logging.getLogger(__name__)
 
 
 class SharedMemoryQueueResources:
-    queue: Queue
+    queue: JoinableQueue
     shared_memory_names: tuple[str, ...]
 
     def __init__(self, nbytes: int, size: int = 3):
         if size < 2:  # noqa: PLR2004
             msg = "size < 2"
             raise ValueError(msg)
-        self.queue = Queue(size - 2)
+        self.queue = JoinableQueue(size - 2)
         shared_memory = tuple(SharedMemory(create=True, size=nbytes) for _ in range(size))
         self.shared_memory_names = tuple(str(m.name) for m in shared_memory)
         for mem in shared_memory:
@@ -27,6 +27,7 @@ class SharedMemoryQueueResources:
         self.close()
 
     def close(self) -> None:
+        self.queue.join()
         for name in self.shared_memory_names:
             mem = SharedMemory(name=name, create=False)
             mem.close()
@@ -34,7 +35,7 @@ class SharedMemoryQueueResources:
 
 
 class SharedMemoryQueueManager:
-    queues: list[Queue]
+    queues: list[SharedMemoryQueueResources]
 
     def __init__(self):
         self.queues = []
