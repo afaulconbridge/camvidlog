@@ -306,7 +306,9 @@ class FrameConsumer:
                     shared_array[shared_memory_name] = np.ndarray(
                         self.info_input.shape, dtype=np.uint8, buffer=shared_memory[shared_memory_name].buf
                     )
+
                 self.process_frame(shared_array[shared_memory_name])
+
                 self.info_input.queue.task_done()
                 logger.debug(f"{self} consumed {frame_no:4d}")
             # "done" the sentinel
@@ -405,6 +407,8 @@ class FrameConsumerProducer(FrameConsumer, FrameProducer):
 
 
 class FrameCopier(FrameConsumerProducer):
+    queue_resourcess: list[SharedMemoryQueueResources]
+
     def __init__(self, info_input: FrameQueueInfoOutput, queue_manager: SharedMemoryQueueManager, copy_number: int):
         super().__init__(info_input=info_input, queue_manager=queue_manager)
         x, y = self._get_x_y()

@@ -193,7 +193,7 @@ class OpenClip(FrameConsumer):
     generate tokens.
     """
 
-    processor: CLIPProcessor
+    preprocessor: CLIPProcessor
     text_queries: str
     processor_input_ids: Any
     queue_results: Queue
@@ -222,7 +222,7 @@ class OpenClip(FrameConsumer):
         self.queue_results = data_recorder.register(columns)
 
     def setup(self) -> None:
-        self.model, _, self.processor = open_clip.create_model_and_transforms(
+        self.model, _, self.preprocessor = open_clip.create_model_and_transforms(
             "hf-hub:imageomics/bioclip",
             device=torch.device("cuda"),
         )
@@ -231,11 +231,18 @@ class OpenClip(FrameConsumer):
             "hf-hub:imageomics/bioclip",
         )
         with torch.no_grad():
-            self.text_features = F.normalize(self.model.encode_text(tokenizer(self.text_queries).to("cuda")), dim=-1)
+            text_tokens = tokenizer(self.text_queries).to("cuda")
+            self.text_features = self.model.encode_text(text_tokens).float()
+            self.text_features /= self.text_features.norm(dim=-1, keepdim=True)
 
+    @torch.no_grad()
     def process_frame(self, frame_in) -> None:
         # TODO move this to a separate process
         self.background_subtractor.apply(frame_in)
+
+        frames = []
+        bgs = []
+        positions = []
 
         for ((i, j), sub_frame), ((i2, j2), sub_bg) in zip(
             split_frame(frame_in=frame_in, subsize=384),
@@ -247,29 +254,25 @@ class OpenClip(FrameConsumer):
 
             frame_pil = Image.fromarray(sub_frame.squeeze())
             bg_pil = Image.fromarray(sub_bg.squeeze())
+            frames.append(self.preprocessor(frame_pil))
+            bgs.append(self.preprocessor(bg_pil))
+            positions.append((i, j))
 
-            with torch.no_grad():
-                image_features = F.normalize(
-                    self.model.encode_image(self.processor(frame_pil).to("cuda").unsqueeze(0)), dim=-1
-                )
-                image_features = image_features.clone().detach()
+        frame_features = self.model.encode_image(torch.tensor(np.stack(frames)).to("cuda"))
+        frame_features /= frame_features.norm(dim=-1, keepdim=True)
+        frame_text_probs = frame_features @ self.text_features.T
+        bg_features = self.model.encode_image(torch.tensor(np.stack(bgs)).to("cuda"))
+        bg_features /= bg_features.norm(dim=-1, keepdim=True)
+        bg_text_probs = bg_features @ self.text_features.T
 
-                bg_features = F.normalize(
-                    self.model.encode_image(self.processor(bg_pil).to("cuda").unsqueeze(0)), dim=-1
-                )
-                bg_features = bg_features.clone().detach()
+        text_result = (frame_text_probs / bg_text_probs).max(dim=0).values
+        text_result = torch.flatten(text_result)
+        results = dict(zip(self.text_queries, [float(i) for i in text_result], strict=True))
 
-                image_text_probs = image_features @ self.text_features.T
-                bg_text_probs = bg_features @ self.text_features.T
-                text_probs = (image_text_probs / bg_text_probs).softmax(dim=-1)
-                results = dict(zip(self.text_queries, [float(i) for i in text_probs[0]], strict=True))
-
-            for label, score in results.items():
-                metrics = {"label": label, "score": score, "i": i, "j": j}
-                metrics.update(self.supplementary)
-                self.queue_results.put((self.frame_no, metrics))
-
-            logger.info(f"Processed frame {self.frame_no} sub {i}x{j}")
+        for label, score in results.items():
+            metrics = {"label": label, "score": score}
+            metrics.update(self.supplementary)
+            self.queue_results.put((self.frame_no, metrics))
 
         logger.info(f"Processed frame {self.frame_no}")
         return True

@@ -1,9 +1,8 @@
 import argparse
 import logging
-import time
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
 
-from camvidlog.procs.ai import Clip, ClipSplitter, GroundingDino, OpenClip
+from camvidlog.procs.ai import OpenClip
 from camvidlog.procs.basics import (
     DataRecorder,
     FFMPEGReader,
@@ -11,6 +10,7 @@ from camvidlog.procs.basics import (
     peek_in_file,
 )
 from camvidlog.procs.frame import Rescaler
+from camvidlog.procs.manager import ProcessManager
 from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
@@ -23,38 +23,40 @@ if __name__ == "__main__":
 
     for filename in filenames:
         vidstats = peek_in_file(filename)
-        ps: list[Process] = []
+        pman = ProcessManager()
 
         # need to assign shared memory from the parent process
         # otherwise it will be eagerly cleaned up when the child terminates
         q_manager = SharedMemoryQueueManager()
         with q_manager:
             data_recorder = DataRecorder(Queue(), 1, filename + ".ai.csv")
-            ps.append(Process(target=data_recorder))
+            pman.add(target=data_recorder, name="DataRecorder")
 
             # file_reader = FileReader(queue_manager=q_manager, filename=filename)
             file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
-            ps.append(Process(target=file_reader))
+            pman.add(target=file_reader, name="Reader")
 
-            copier = FrameCopier(file_reader.info_output, q_manager, 3)
-            ps.append(Process(target=copier))
+            copier = FrameCopier(file_reader.info_output, q_manager, 4)
+            pman.add(target=copier, name="Copier")
 
             for i, (x, y) in enumerate(
                 (
                     (vidstats.x, vidstats.y),
                     (vidstats.x // 2, vidstats.y // 2),
                     (vidstats.x // 4, vidstats.y // 4),
+                    (384, 384),
                 )
             ):
                 rescaler = Rescaler(
                     info_input=copier.info_outputs[i],
+                    # info_input=file_reader.info_output,
                     queue_manager=q_manager,
                     x=x,
                     y=y,
                     fps_in=30,
                     fps_out=5,
                 )
-                ps.append(Process(target=rescaler))
+                pman.add(target=rescaler, name=f"Rescaler {x}x{y}")
 
                 queries = [
                     "deer",
@@ -90,13 +92,6 @@ if __name__ == "__main__":
                     data_recorder=data_recorder,
                     supplementary={"res": f"{x}x{y}"},
                 )
-                ps.append(Process(target=ai_clip))
+                pman.add(target=ai_clip, name=f"OpenClip {x}x{y}")
 
-            starttime = time.time()
-            for p in ps:
-                p.start()
-            for p in ps:
-                p.join()
-            endtime = time.time()
-
-            logger.info(f"Runtime: {endtime-starttime:0.2f}")
+            pman.run_all()
