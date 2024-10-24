@@ -125,10 +125,13 @@ class Rescaler(FrameConsumerProducer):
         return (self.res[0], self.res[1])
 
 
-def split_frame(frame_in: MatLike, subsize: int) -> Generator[tuple[tuple[int, int], MatLike], None, None]:
+def split_frame(
+    frame_in: MatLike, subsize: int
+) -> Generator[tuple[tuple[int, int], tuple[int, int], MatLike], None, None]:
     y, x, _ = frame_in.shape
+    # always have a central subimage
     if x == subsize and y == subsize:
-        yield (0, 0), frame_in
+        yield (0, 0), (x, y), frame_in
         return
     # for each quadrant
     # work out size to fill
@@ -144,4 +147,4 @@ def split_frame(frame_in: MatLike, subsize: int) -> Generator[tuple[tuple[int, i
             offset_x = patch_gap_x * i
             offset_y = patch_gap_y * j
             subimage = frame_in[offset_y : offset_y + subsize, offset_x : offset_x + subsize]
-            yield (i, j), subimage
+            yield (offset_x, offset_y), (offset_x + subsize, offset_y + subsize), subimage

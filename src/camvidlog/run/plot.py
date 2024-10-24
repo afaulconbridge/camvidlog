@@ -14,14 +14,15 @@ if __name__ == "__main__":
     filenames_videos: tuple[str] = tuple(args.filename)
     for filename_video in filenames_videos:
         filename_out = filename_video + ".png"
-        data = pd.read_csv(filename_video + ".csv")
+        # data = pd.read_csv(filename_video + ".csv")
         data_ai = pd.read_csv(filename_video + ".ai.csv")
-        data_ai_grouped = data_ai.groupby(["frame_no", "label", "model_id"], as_index=False).max()
+        # data_ai_grouped = data_ai.groupby(["frame_no", "label", "model_id"], as_index=False)  # .max()
 
         # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1)
         fig, ax1 = plt.subplots(nrows=1, ncols=1)
 
-        sns.lineplot(data_ai_grouped, x="frame_no", y="score", style="label", hue="label", ax=ax1)
+        # sns.lineplot(data_ai_grouped, x="frame_no", y="score", style="label", hue="label", ax=ax1)
+        sns.lineplot(data_ai, x="frame_no", y="score", style="label", hue="label", ax=ax1)
         # ax1.set_ylim(0, 1)
         ax1.set_xlim(0, 900)
 

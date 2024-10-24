@@ -36,17 +36,16 @@ if __name__ == "__main__":
             file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
             pman.add(target=file_reader, name="Reader")
 
-            copier = FrameCopier(file_reader.info_output, q_manager, 4)
+            resolutions = (
+                # sometimes one of these resolutions hangs indefinitely at the end!
+                (vidstats.x, vidstats.y),
+                (vidstats.x // 2, vidstats.y // 2),
+                (vidstats.x // 4, vidstats.y // 4),
+                (384, 384),
+            )
+            copier = FrameCopier(file_reader.info_output, q_manager, len(resolutions))
             pman.add(target=copier, name="Copier")
-
-            for i, (x, y) in enumerate(
-                (
-                    (vidstats.x, vidstats.y),
-                    (vidstats.x // 2, vidstats.y // 2),
-                    (vidstats.x // 4, vidstats.y // 4),
-                    (384, 384),
-                )
-            ):
+            for i, (x, y) in enumerate(resolutions):
                 rescaler = Rescaler(
                     info_input=copier.info_outputs[i],
                     # info_input=file_reader.info_output,
@@ -57,20 +56,6 @@ if __name__ == "__main__":
                     fps_out=5,
                 )
                 pman.add(target=rescaler, name=f"Rescaler {x}x{y}")
-
-                queries = [
-                    "deer",
-                    "cat",
-                    "hedgehog",
-                    "fox",
-                    "otter",
-                    "mink",
-                    "badger",
-                    "ferret",
-                    "rat",
-                    "mouse",
-                    "mole",
-                ]
                 queries = [
                     "Eukaryota Animalia Chordata Mammalia Artiodactyla Cervidae Cervinae Muntiacini Muntiacus (muntjac deer)",
                     "Eukaryota Animalia Chordata Mammalia Carnivora Feliformia Felidae Felinae Felis Felis catus (domestic cat)",
@@ -85,6 +70,16 @@ if __name__ == "__main__":
                     # "mole",
                     # "not deer and not cat and not hedgehog and not fox and not ferret",
                 ]
+
+                queries = [
+                    "muntjac deer",
+                    "domestic cat",
+                    "European hedgehog",
+                    "red fox",
+                    "domestic ferret",
+                ]
+                # TODO do only when detected greyscale input
+                queries += [f"greyscale photo of {q}" for q in queries]
 
                 ai_clip = OpenClip(
                     info_input=rescaler.info_output,

@@ -99,6 +99,9 @@ def peek_in_file(filename: str) -> VideoFileStats:
             video_capture = None
 
 
+# TODO detect if a "colour" video is infact greyscale
+
+
 class FrameProducer:
     queue_resources: SharedMemoryQueueResources
     info_output: FrameQueueInfoOutput

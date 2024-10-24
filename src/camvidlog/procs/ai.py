@@ -214,10 +214,10 @@ class OpenClip(FrameConsumer):
         self.supplementary = supplementary if supplementary else {}
         self.supplementary["model_id"] = self.model_id
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=900, detectShadows=False
+            history=50, detectShadows=False
         )  # TODO customize
 
-        columns = ["score", "label", "i", "j"]
+        columns = ["score", "label", "split_x_min", "split_y_min", "split_x_max", "split_y_max"]
         columns.extend(self.supplementary.keys())
         self.queue_results = data_recorder.register(columns)
 
@@ -244,19 +244,29 @@ class OpenClip(FrameConsumer):
         bgs = []
         positions = []
 
-        for ((i, j), sub_frame), ((i2, j2), sub_bg) in zip(
+        for (
+            (split_x_min, split_y_min),
+            (split_x_max, split_y_max),
+            sub_frame,
+        ), (
+            (bgsplit_x_min, bgsplit_y_min),
+            (bgsplit_x_max, bgsplit_y_max),
+            sub_bg,
+        ) in zip(
             split_frame(frame_in=frame_in, subsize=384),
             split_frame(frame_in=self.background_subtractor.getBackgroundImage(), subsize=384),
             strict=True,
         ):
-            assert i == i2
-            assert j == j2
+            assert split_x_min == bgsplit_x_min
+            assert split_y_min == bgsplit_y_min
+            assert split_x_max == bgsplit_x_max
+            assert split_y_max == bgsplit_y_max
 
             frame_pil = Image.fromarray(sub_frame.squeeze())
             bg_pil = Image.fromarray(sub_bg.squeeze())
             frames.append(self.preprocessor(frame_pil))
             bgs.append(self.preprocessor(bg_pil))
-            positions.append((i, j))
+            positions.append(((split_x_min, split_y_min), (split_x_max, split_y_max)))
 
         frame_features = self.model.encode_image(torch.tensor(np.stack(frames)).to("cuda"))
         frame_features /= frame_features.norm(dim=-1, keepdim=True)
@@ -265,14 +275,28 @@ class OpenClip(FrameConsumer):
         bg_features /= bg_features.norm(dim=-1, keepdim=True)
         bg_text_probs = bg_features @ self.text_features.T
 
-        text_result = (frame_text_probs / bg_text_probs).max(dim=0).values
-        text_result = torch.flatten(text_result)
-        results = dict(zip(self.text_queries, [float(i) for i in text_result], strict=True))
-
-        for label, score in results.items():
-            metrics = {"label": label, "score": score}
-            metrics.update(self.supplementary)
-            self.queue_results.put((self.frame_no, metrics))
+        # text_result = (frame_text_probs / bg_text_probs).max(dim=0).values
+        text_result = (frame_text_probs / bg_text_probs).to("cpu")
+        # text_result = torch.flatten(text_result)
+        for sub_result, (
+            (split_x_min, split_y_min),
+            (split_x_max, split_y_max),
+        ) in zip(
+            text_result,
+            positions,
+            strict=True,
+        ):
+            for label, score in zip(self.text_queries, sub_result, strict=False):
+                metrics = {
+                    "label": label,
+                    "score": float(score),
+                    "split_x_min": split_x_min,
+                    "split_y_min": split_y_min,
+                    "split_x_max": split_x_max,
+                    "split_y_max": split_y_max,
+                }
+                metrics.update(self.supplementary)
+                self.queue_results.put((self.frame_no, metrics))
 
         logger.info(f"Processed frame {self.frame_no}")
         return True
