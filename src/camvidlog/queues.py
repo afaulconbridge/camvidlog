@@ -1,8 +1,51 @@
 import logging
+from collections.abc import Iterable
+from contextlib import contextmanager
 from multiprocessing import JoinableQueue
 from multiprocessing.shared_memory import SharedMemory
+from typing import Any
+
+import numpy as np
+
+from camvidlog.frameinfo import FrameQueueInfoOutput
 
 logger = logging.getLogger(__name__)
+
+
+class SharedMemoryFrameContext:
+    def __init__(self, frame_queue_info: FrameQueueInfoOutput, shared_memory_name: str, *extras: Iterable[Any]):
+        self.shared_memory_name = shared_memory_name
+        self.frame_queue_info = frame_queue_info
+        self.extras = extras
+
+    def __enter__(self):
+        self.shared_memory = SharedMemory(name=self.shared_memory_name, create=False)
+        self.array = np.ndarray(
+            self.frame_queue_info.shape,
+            dtype=np.uint8,
+            buffer=self.shared_memory.buf,
+        )
+        return (self.array, *self.extras)
+
+    def __exit__(self, _type, value, traceback) -> None:
+        self.shared_memory.close()
+        self.frame_queue_info.queue.task_done()
+
+
+class SharedMemoryQueueConsumer:
+    frame_queue_info: FrameQueueInfoOutput
+
+    def __init__(self, frame_queue_info: FrameQueueInfoOutput):
+        self.frame_queue_info = frame_queue_info
+
+    def get(self, block: bool = True, timeout: float | None = None) -> Any:  # noqa: FBT001, FBT002
+        item = self.frame_queue_info.queue.get(block, timeout)
+        if item is None:
+            self.frame_queue_info.queue.task_done()
+            return None
+        else:
+            shared_memory_name, *extras = item
+            return SharedMemoryFrameContext(self.frame_queue_info, shared_memory_name, *extras)
 
 
 class SharedMemoryQueueResources:

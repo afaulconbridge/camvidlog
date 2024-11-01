@@ -1,10 +1,11 @@
-from contextlib import contextmanager
+import logging
 import time
+from contextlib import contextmanager
+
 import ffmpeg
 import torch
 from PIL import Image, ImageDraw
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ while True:
 
     with timectx(f"frame {i} write"):
         draw = ImageDraw.Draw(image)
-        for j, (score, label, bbox) in enumerate(zip(*results.values())):
+        for j, (score, label, bbox) in enumerate(zip(*results.values(), strict=False)):
             if label.startswith("screens"):
                 # screens or screenshot ?
                 # skip the context label

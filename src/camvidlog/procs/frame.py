@@ -7,7 +7,8 @@ import ffmpeg
 import numpy as np
 from cv2.typing import MatLike
 
-from camvidlog.procs.basics import Colourspace, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput
+from camvidlog.procs.basics import FrameConsumer, FrameConsumerProducer
 from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)

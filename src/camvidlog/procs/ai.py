@@ -19,7 +19,8 @@ from transformers import (
     GroundingDinoProcessor,
 )
 
-from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumer, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput
+from camvidlog.procs.basics import DataRecorder, FrameConsumer, FrameConsumerProducer
 from camvidlog.procs.frame import split_frame
 from camvidlog.queues import SharedMemoryQueueManager
 

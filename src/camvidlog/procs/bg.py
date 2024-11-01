@@ -4,7 +4,8 @@ from multiprocessing import Queue
 import cv2
 import numpy as np
 
-from camvidlog.procs.basics import Colourspace, DataRecorder, FrameConsumerProducer, FrameQueueInfoOutput
+from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput
+from camvidlog.procs.basics import DataRecorder, FrameConsumerProducer
 from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,10 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
         queue_manager: SharedMemoryQueueManager,
         history: int = 500,
         var_threshold=16,
-        output_image_filename="",
     ):
         super().__init__(info_input=info_input, queue_manager=queue_manager)
         self.history = history
         self.var_threshold = var_threshold
-        self.output_image_filename = output_image_filename
 
         # always outputs greyscale
         self.info_output.colourspace = Colourspace.greyscale
@@ -41,8 +40,6 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
         return True
 
     def close(self) -> None:
-        if self.output_image_filename and self._background_subtractor:
-            cv2.imwrite(self.output_image_filename, self._background_subtractor.getBackgroundImage())
         super().close()
 
 

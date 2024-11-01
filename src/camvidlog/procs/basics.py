@@ -1,9 +1,7 @@
 import logging
 from collections.abc import Iterable
 from csv import DictWriter
-from dataclasses import dataclass
-from enum import Enum
-from multiprocessing import JoinableQueue, Queue
+from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
 from subprocess import Popen
 
@@ -11,69 +9,12 @@ import cv2
 import ffmpeg
 import numpy as np
 
-from camvidlog.queues import SharedMemoryQueueManager, SharedMemoryQueueResources
+from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput, VideoFileStats
+from camvidlog.queues import SharedMemoryQueueConsumer, SharedMemoryQueueManager, SharedMemoryQueueResources
 
 logger = logging.getLogger(__name__)
 
 TIMEOUT = 600.0
-
-
-class Resolution(Enum):
-    # Y,X to match openCV
-    VGA = (480, 854)  # FWVGA
-    SD = (720, 1280)
-    HD = (1080, 1920)  # 2k, full HD
-    UHD = (2160, 3840)  # 4K, UHD
-
-
-class Colourspace(Enum):
-    RGB = "rgb"
-    greyscale = "greyscale"
-    mask = "mask"
-
-
-@dataclass
-class FrameQueueInfoOutput:
-    queue: JoinableQueue
-    x: int
-    y: int
-    colourspace: Colourspace
-
-    @property
-    def shape(self) -> tuple[int, int, int]:
-        # Y,X to match openCV
-        return (self.y, self.x, 1 if self.colourspace == Colourspace.greyscale else 3)
-
-    @property
-    def area(self) -> int:
-        return self.x * self.y
-
-    @property
-    def nbytes(self) -> int:
-        return (
-            self.x * self.y * (1 if self.colourspace == Colourspace.greyscale else 3) * (np.iinfo(np.uint8).bits // 8)
-        )
-
-
-@dataclass
-class VideoFileStats:
-    filename: str
-    fps: float
-    x: int
-    y: int
-    colourspace: Colourspace
-
-    @property
-    def shape(self) -> tuple[int, int, int]:
-        # Y,X to match openCV
-        return (self.y, self.x, 1 if self.colourspace == Colourspace.greyscale else 3)
-
-    @property
-    def nbytes(self) -> int:
-        if self.colourspace == Colourspace.greyscale:
-            return self.x * self.y
-        else:
-            return self.x * self.y * 3
 
 
 def peek_in_file(filename: str) -> VideoFileStats:
@@ -106,8 +47,8 @@ class FrameProducer:
     queue_resources: SharedMemoryQueueResources
     info_output: FrameQueueInfoOutput
 
-    def __init__(self, *, queue_manager: SharedMemoryQueueManager, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *, queue_manager: SharedMemoryQueueManager):
+        super().__init__()
         nbytes = self._get_nbytes()
         self.queue_resources = queue_manager.make_queue(nbytes)
         x, y = self._get_x_y()
@@ -288,39 +229,26 @@ class FFMPEGReader(FrameProducer):
 
 class FrameConsumer:
     info_input: FrameQueueInfoOutput
+    consumer: SharedMemoryQueueConsumer
     frame_no: int | None
+    frame_time: float | None
 
     def __init__(self, *, info_input: FrameQueueInfoOutput, **kwargs):
         self.info_input = info_input
+        self.consumer = SharedMemoryQueueConsumer(info_input)
         super().__init__(**kwargs)
 
     def __call__(self):
-        shared_memory: dict[str, SharedMemory] = {}
-        shared_array: dict[str, np.ndarray] = {}
         try:
             self.setup()
-
-            while item := self.info_input.queue.get(timeout=TIMEOUT):
-                shared_memory_name, frame_no, frame_time = item
-                self.frame_no = frame_no
-
-                if shared_memory_name not in shared_memory:
-                    shared_memory[shared_memory_name] = SharedMemory(name=shared_memory_name, create=False)
-                    shared_array[shared_memory_name] = np.ndarray(
-                        self.info_input.shape, dtype=np.uint8, buffer=shared_memory[shared_memory_name].buf
-                    )
-
-                self.process_frame(shared_array[shared_memory_name])
-
-                self.info_input.queue.task_done()
-                logger.debug(f"{self} consumed {frame_no:4d}")
-            # "done" the sentinel
-            self.info_input.queue.task_done()
+            while item := self.consumer.get(timeout=TIMEOUT):
+                with item as content:
+                    frame, frame_no, frame_time, *extras = content
+                    self.frame_no = frame_no
+                    self.frame_time = frame_time
+                    self.process_frame(frame)
         finally:
             self.close()
-
-            for shared_memory_item in shared_memory.values():
-                shared_memory_item.close()
 
     def setup(self) -> None:
         pass
@@ -330,6 +258,18 @@ class FrameConsumer:
 
     def close(self) -> None:
         self.info_input.queue.close()
+
+
+class FrameConsumerNull:
+    info_input: FrameQueueInfoOutput
+
+    def __init__(self, info_input: FrameQueueInfoOutput):
+        self.info_input = info_input
+
+    def __call__(self):
+        while (item := self.info_input.queue.get(timeout=TIMEOUT)) is not None:
+            with item:
+                frame, *extras = item
 
 
 class FrameConsumerProducer(FrameConsumer, FrameProducer):
