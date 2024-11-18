@@ -19,7 +19,7 @@ from transformers import (
     GroundingDinoProcessor,
 )
 
-from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput
+from camvidlog.frameinfo import Colourspace, FrameInfo
 from camvidlog.procs.basics import DataRecorder, FrameConsumer, FrameConsumerProducer
 from camvidlog.procs.frame import split_frame
 from camvidlog.queues import SharedMemoryQueueManager
@@ -35,7 +35,7 @@ class GroundingDino(FrameConsumer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queries: tuple[str, ...],
         data_recorder: DataRecorder,
         model_id: str,
@@ -127,7 +127,7 @@ class Clip(FrameConsumer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queries: tuple[str, ...],
         data_recorder: DataRecorder,
         model_id: str,
@@ -202,7 +202,7 @@ class OpenClip(FrameConsumer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queries: tuple[str, ...],
         data_recorder: DataRecorder,
         supplementary: dict[str, str] | None = None,
@@ -325,7 +325,7 @@ class ClipSplitter(FrameConsumer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queries: tuple[str, ...],
         data_recorder: DataRecorder,
         model_id: str,
@@ -401,7 +401,7 @@ class BiRefNet(FrameConsumerProducer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queue_manager: SharedMemoryQueueManager,
         model_id: str = "ZhengPeng7/BiRefNet",
     ):

@@ -7,7 +7,7 @@ import ffmpeg
 import numpy as np
 from cv2.typing import MatLike
 
-from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput
+from camvidlog.frameinfo import Colourspace, FrameInfo
 from camvidlog.procs.basics import FrameConsumer, FrameConsumerProducer
 from camvidlog.queues import SharedMemoryQueueManager
 
@@ -19,7 +19,7 @@ class SaveToFile(FrameConsumer):
     fps: float
     out: cv2.VideoWriter | None
 
-    def __init__(self, filename: str, fps: float, info_input: FrameQueueInfoOutput):
+    def __init__(self, filename: str, fps: float, info_input: FrameInfo):
         super().__init__(info_input=info_input)
         self.filename = filename
         self.fps = fps
@@ -49,7 +49,7 @@ class FFMPEGToFile(FrameConsumer):
     fps: float
     out: Popen | None = None
 
-    def __init__(self, filename: str, fps: float, info_input: FrameQueueInfoOutput):
+    def __init__(self, filename: str, fps: float, info_input: FrameInfo):
         super().__init__(info_input=info_input)
         self.filename = filename
         self.fps = fps
@@ -101,7 +101,7 @@ class Rescaler(FrameConsumerProducer):
         y: int,
         fps_in: int,
         fps_out: int,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queue_manager: SharedMemoryQueueManager,
     ):
         self.res = (x, y)

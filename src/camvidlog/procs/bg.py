@@ -4,7 +4,7 @@ from multiprocessing import Queue
 import cv2
 import numpy as np
 
-from camvidlog.frameinfo import Colourspace, FrameQueueInfoOutput
+from camvidlog.frameinfo import Colourspace, FrameInfo
 from camvidlog.procs.basics import DataRecorder, FrameConsumerProducer
 from camvidlog.queues import SharedMemoryQueueManager
 
@@ -19,7 +19,7 @@ class BackgroundSubtractorMOG2(FrameConsumerProducer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queue_manager: SharedMemoryQueueManager,
         history: int = 500,
         var_threshold=16,
@@ -50,7 +50,7 @@ class BackgroundSubtractorKNN(FrameConsumerProducer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queue_manager: SharedMemoryQueueManager,
         history: int = 500,
         dist2_threshold: float = 400.0,
@@ -77,7 +77,7 @@ class BackgroundMaskDenoiser(FrameConsumerProducer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queue_manager: SharedMemoryQueueManager,
         kernel_size: int = 3,
     ):
@@ -106,7 +106,7 @@ class MaskStats(FrameConsumerProducer):
 
     def __init__(
         self,
-        info_input: FrameQueueInfoOutput,
+        info_input: FrameInfo,
         queue_manager: SharedMemoryQueueManager,
         data_recorder: DataRecorder,
         prefix: str = "",

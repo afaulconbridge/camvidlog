@@ -1,6 +1,6 @@
 import argparse
 import logging
-from multiprocessing import Queue
+from multiprocessing import JoinableQueue, Queue
 
 from camvidlog.procs.ai import OpenClip
 from camvidlog.procs.basics import (
@@ -32,8 +32,7 @@ if __name__ == "__main__":
             data_recorder = DataRecorder(Queue(), 1, filename + ".ai.csv")
             pman.add(target=data_recorder, name="DataRecorder")
 
-            # file_reader = FileReader(queue_manager=q_manager, filename=filename)
-            file_reader = FFMPEGReader(queue_manager=q_manager, filename=filename)
+            file_reader = FFMPEGReader(filename=filename, queue=JoinableQueue(size=5))
             pman.add(target=file_reader, name="Reader")
 
             resolutions = (

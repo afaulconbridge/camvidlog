@@ -20,8 +20,7 @@ class Colourspace(Enum):
 
 
 @dataclass
-class FrameQueueInfoOutput:
-    queue: JoinableQueue
+class FrameInfo:
     x: int
     y: int
     colourspace: Colourspace
@@ -46,6 +45,7 @@ class FrameQueueInfoOutput:
 class VideoFileStats:
     filename: str
     fps: float
+    # TODO replace with FrameInfo
     x: int
     y: int
     colourspace: Colourspace
