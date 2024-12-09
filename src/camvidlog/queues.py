@@ -129,7 +129,7 @@ class SharedMemoryProducer:
         self.frame_info = frame_info
         self.queue = queue
         self.timeout_default = timeout_default
-        shared_memory = tuple(SharedMemory(create=True, size=frame_info.nbytes) for _ in range(queue.maxsize + 2))
+        shared_memory = tuple(SharedMemory(create=True, size=frame_info.nbytes) for _ in range(queue.qsize() + 2))
         self.shared_memory_names = tuple(str(m.name) for m in shared_memory)
         self.shared_memory_name_index = 0
 

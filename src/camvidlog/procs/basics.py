@@ -1,8 +1,8 @@
 import logging
 from collections.abc import Iterable
+from contextlib import ExitStack
 from csv import DictWriter
 from multiprocessing import JoinableQueue, Queue
-from multiprocessing.shared_memory import SharedMemory
 from subprocess import Popen
 
 import cv2
@@ -13,8 +13,6 @@ from camvidlog.frameinfo import Colourspace, FrameInfo, VideoFileStats
 from camvidlog.queues import (
     SharedMemoryConsumer,
     SharedMemoryProducer,
-    SharedMemoryQueueManager,
-    SharedMemoryQueueResources,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,13 +53,13 @@ class FrameProducer:
     def __init__(self, info_input: FrameInfo, queue: JoinableQueue):
         self.info_input = info_input
         self.queue = queue
+        self.frame_no = 0
 
     def setup(self) -> None:
         pass
 
     def close(self) -> None:
-        # sent end sentinel
-        self.info_output.queue.put(None, timeout=TIMEOUT)
+        pass
 
     def generate_frame_into(self, array: np.ndarray) -> tuple[bool, int | None, float | None]:
         raise NotImplementedError
@@ -74,10 +72,10 @@ class FrameProducer:
             with SharedMemoryProducer(self.info_input, self.queue) as producer:
                 for item in producer:
                     with item as content:
-                        frame, frame_no, frame_time, *extras = content
-                        self.frame_no = frame_no
-                        self.frame_time = frame_time
-                        sucess, *extras = self.generate_frame_into(frame)
+                        frame, extras = content
+                        sucess, frame_no, frame_time = self.generate_frame_into(frame)
+                        extras.append(frame_no)
+                        extras.append(frame_time)
                         if not sucess:
                             break
         finally:
@@ -251,89 +249,39 @@ class FrameConsumerProducer:
 
 
 class FrameCopier:
-    queue_resourcess: list[SharedMemoryQueueResources]
+    info_input: FrameInfo
+    queue_in: JoinableQueue
+    queues_out: tuple[JoinableQueue, ...]
 
     def __init__(self, info_input: FrameInfo, queue_in: JoinableQueue, queues_out: Iterable[JoinableQueue]):
-        self.info_input = FrameInfo
-
-        self.info_outputs = [self.info_output]
-        self.info_output = None
-        self.queue_resourcess = [self.queue_resources]
-        self.queue_resources = None
-        for _ in range(1, copy_number):
-            queue_resources = queue_manager.make_queue(nbytes)
-            self.queue_resourcess.append(queue_resources)
-            self.info_outputs.append(FrameInfo(queue_resources.queue, x, y, colourspace))
-
-    def _get_nbytes(self) -> int:
-        return self.info_input.nbytes
-
-    def _get_x_y(self) -> tuple[int, int]:
-        return (self.info_input.x, self.info_input.y)
-
-    def _get_colourspace(self) -> Colourspace:
-        return self.info_input.colourspace
+        self.info_input = info_input
+        self.queue_in = queue_in
+        self.queues_out = tuple(queues_out)
 
     def __call__(self):
         try:
             self.setup()
-            shared_pointer = 0
-            shared_memory_in: dict[str, SharedMemory] = {}
-            shared_array_in: dict[str, np.ndarray] = {}
-
-            shared_memory_out: tuple[tuple[SharedMemory, ...]] = tuple(
-                tuple(SharedMemory(name, False) for name in queue_resource.shared_memory_names)
-                for queue_resource in self.queue_resourcess
-            )
-            shared_array_out: tuple[tuple[np.ndarray, ...]] = tuple(
-                tuple(
-                    np.ndarray(self.info_outputs[0].shape, dtype=np.uint8, buffer=shared_memory.buf)
-                    for shared_memory in shared_memory_out_inner
-                )
-                for shared_memory_out_inner in shared_memory_out
-            )
-
-            while item := self.info_input.queue.get(timeout=TIMEOUT):
-                shared_memory_name_in, frame_no, frame_time = item
-                self.frame_no = frame_no
-
-                if shared_memory_name_in not in shared_memory_in:
-                    shared_memory_in[shared_memory_name_in] = SharedMemory(name=shared_memory_name_in, create=False)
-                    shared_array_in[shared_memory_name_in] = np.ndarray(
-                        self.info_input.shape, dtype=np.uint8, buffer=shared_memory_in[shared_memory_name_in].buf
-                    )
-
-                self.info_input.queue.task_done()
-                logger.debug(f"{self} consumed {frame_no:4d}")
-
-                for shared_array_out_inner in shared_array_out:
-                    np.copyto(shared_array_out_inner[shared_pointer], shared_array_in[shared_memory_name_in])
-
-                for info_output, queue_resources in zip(self.info_outputs, self.queue_resourcess, strict=False):
-                    info_output.queue.put(
-                        (queue_resources.shared_memory_names[shared_pointer], frame_no, frame_time),
-                        timeout=TIMEOUT,
-                    )
-
-                if shared_pointer == 0:
-                    shared_pointer = len(self.queue_resourcess[0].shared_memory_names) - 1
-                else:
-                    shared_pointer -= 1
-            # "done" the sentinel
-            self.info_input.queue.task_done()
+            consumer = SharedMemoryConsumer(self.info_input, self.queue_in)
+            producers = [SharedMemoryProducer(self.info_input, q) for q in self.queues_out]
+            with ExitStack() as stack:
+                [stack.enter_context(producer) for producer in producers]
+                for item_in, items_out in zip(consumer, zip(producers, strict=True), strict=True):
+                    with item_in as content:
+                        frame_in, frame_no, frame_time, *extras_in = content
+                        logger.debug(f"{self} processing {frame_no}")
+                        for i, item_out in enumerate(items_out):
+                            with item_out as product:
+                                frame_out, *extras_out = product
+                                logger.debug(f"{self} processing {frame_no} to {i}")
+                                np.copyto(frame_out, frame_in)
         finally:
             self.close()
 
-            for mem in shared_memory_in.values():
-                mem.close()
-            for mems in shared_memory_out:
-                for mem in mems:
-                    mem.close()
+    def setup(self) -> None:
+        pass
 
-            self.info_input.queue.close()
-            # sent end sentinel
-            for info_output in self.info_outputs:
-                info_output.queue.put(None, timeout=TIMEOUT)
+    def close(self) -> None:
+        pass
 
 
 class DataRecorder:

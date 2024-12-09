@@ -40,6 +40,7 @@ class ProcessManager:
             if p.exitcode is None:
                 p.terminate()
                 p.kill()
+            p.join(0)
             p.close()
 
         endtime = time.time()

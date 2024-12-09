@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Generator
+from multiprocessing import JoinableQueue
 from subprocess import Popen
 
 import cv2
@@ -9,7 +10,6 @@ from cv2.typing import MatLike
 
 from camvidlog.frameinfo import Colourspace, FrameInfo
 from camvidlog.procs.basics import FrameConsumer, FrameConsumerProducer
-from camvidlog.queues import SharedMemoryQueueManager
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,7 @@ class FFMPEGToFile(FrameConsumer):
 class Rescaler(FrameConsumerProducer):
     res: tuple[int, int]
     fps_ratio: float
+    info_output: FrameInfo
 
     def __init__(
         self,
@@ -102,16 +103,19 @@ class Rescaler(FrameConsumerProducer):
         fps_in: int,
         fps_out: int,
         info_input: FrameInfo,
-        queue_manager: SharedMemoryQueueManager,
+        queue_in: JoinableQueue,
+        queue_out: JoinableQueue,
     ):
         self.res = (x, y)
-        super().__init__(info_input=info_input, queue_manager=queue_manager)
+        super().__init__(info_input=info_input, queue_in=queue_in, queue_out=queue_out)
         if fps_out > fps_in:
             msg = "fps_out cannot be greater than fps_in"
             raise ValueError(msg)
         self.fps_ratio = fps_in / fps_out
+        self.info_output = FrameInfo(x, y, info_input.colourspace)
 
     def process_frame(self, frame_in, frame_out) -> bool:
+        logger.debug(f"{self} processing {self.frame_no}")
         if self.frame_no % self.fps_ratio < 1.0:
             cv2.resize(frame_in, self.res, frame_out)  # , interpolation=cv2.INTER_LANCZOS4)
             return True

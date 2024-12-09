@@ -32,7 +32,7 @@ if __name__ == "__main__":
             data_recorder = DataRecorder(Queue(), 1, filename + ".ai.csv")
             pman.add(target=data_recorder, name="DataRecorder")
 
-            file_reader = FFMPEGReader(filename=filename, queue=JoinableQueue(size=5))
+            file_reader = FFMPEGReader(filename=filename, queue=JoinableQueue(maxsize=5))
             pman.add(target=file_reader, name="Reader")
 
             resolutions = (
@@ -42,17 +42,19 @@ if __name__ == "__main__":
                 (vidstats.x // 4, vidstats.y // 4),
                 (384, 384),
             )
-            copier = FrameCopier(file_reader.info_output, q_manager, len(resolutions))
+            copier = FrameCopier(
+                file_reader.info_output, file_reader.queue, [JoinableQueue(maxsize=5) for _ in resolutions]
+            )
             pman.add(target=copier, name="Copier")
             for i, (x, y) in enumerate(resolutions):
                 rescaler = Rescaler(
-                    info_input=copier.info_outputs[i],
-                    # info_input=file_reader.info_output,
-                    queue_manager=q_manager,
                     x=x,
                     y=y,
                     fps_in=30,
                     fps_out=5,
+                    info_input=copier.info_input,
+                    queue_in=copier.queues_out[i],
+                    queue_out=JoinableQueue(maxsize=5),
                 )
                 pman.add(target=rescaler, name=f"Rescaler {x}x{y}")
                 queries = [
@@ -82,6 +84,7 @@ if __name__ == "__main__":
 
                 ai_clip = OpenClip(
                     info_input=rescaler.info_output,
+                    queue=rescaler.queue_out,
                     queries=queries,
                     data_recorder=data_recorder,
                     supplementary={"res": f"{x}x{y}"},
