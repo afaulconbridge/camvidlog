@@ -1,0 +1,557 @@
+INFO:__main__:Loaded microsoft/Florence-2-base-ft
+INFO:__main__:Processing frame 1
+INFO:__main__:1 : deer
+INFO:__main__:Processed frame 1 in 3.430449962615967s
+INFO:__main__:Processing frame 11
+INFO:__main__:11 : animal
+INFO:__main__:Processed frame 11 in 3.282020330429077s
+INFO:__main__:Processing frame 21
+INFO:__main__:21 : deer
+INFO:__main__:Processed frame 21 in 3.5974063873291016s
+INFO:__main__:Processing frame 31
+INFO:__main__:31 : deer
+INFO:__main__:Processed frame 31 in 3.5090887546539307s
+INFO:__main__:Processing frame 41
+INFO:__main__:41 : deer
+INFO:__main__:Processed frame 41 in 3.3825621604919434s
+INFO:__main__:Processing frame 51
+INFO:__main__:51 : deer
+INFO:__main__:Processed frame 51 in 3.0902538299560547s
+INFO:__main__:Processing frame 61
+INFO:__main__:61 : deer
+INFO:__main__:Processed frame 61 in 3.4147098064422607s
+INFO:__main__:Processing frame 71
+INFO:__main__:71 : deer
+INFO:__main__:Processed frame 71 in 3.4602181911468506s
+INFO:__main__:Processing frame 81
+INFO:__main__:81 : deer
+INFO:__main__:Processed frame 81 in 3.430436134338379s
+INFO:__main__:Processing frame 91
+INFO:__main__:91 : deer
+INFO:__main__:Processed frame 91 in 3.2141671180725098s
+INFO:__main__:Processing frame 101
+INFO:__main__:101 : deer
+INFO:__main__:Processed frame 101 in 3.2444679737091064s
+INFO:__main__:Processing frame 111
+INFO:__main__:111 : animal
+INFO:__main__:Processed frame 111 in 3.065669536590576s
+INFO:__main__:Processing frame 121
+INFO:__main__:121 : deer
+INFO:__main__:Processed frame 121 in 3.166616916656494s
+INFO:__main__:Processing frame 131
+INFO:__main__:131 : deer
+INFO:__main__:Processed frame 131 in 3.120789051055908s
+INFO:__main__:Processing frame 141
+INFO:__main__:141 : deer
+INFO:__main__:Processed frame 141 in 3.1133358478546143s
+INFO:__main__:Processing frame 151
+INFO:__main__:151 : deer
+INFO:__main__:Processed frame 151 in 3.1443700790405273s
+INFO:__main__:Processing frame 161
+INFO:__main__:161 : deer
+INFO:__main__:Processed frame 161 in 3.2066752910614014s
+INFO:__main__:Processing frame 171
+INFO:__main__:171 : deer
+INFO:__main__:Processed frame 171 in 3.115422248840332s
+INFO:__main__:Processing frame 181
+INFO:__main__:181 : deer
+INFO:__main__:Processed frame 181 in 3.1621687412261963s
+INFO:__main__:Processing frame 191
+INFO:__main__:191 : deer
+INFO:__main__:Processed frame 191 in 3.283844470977783s
+INFO:__main__:Processing frame 201
+INFO:__main__:201 : deer
+INFO:__main__:Processed frame 201 in 3.384469509124756s
+INFO:__main__:Processing frame 211
+INFO:__main__:211 : deer
+INFO:__main__:Processed frame 211 in 3.3095152378082275s
+INFO:__main__:Processing frame 221
+INFO:__main__:221 : deer
+INFO:__main__:Processed frame 221 in 3.188946485519409s
+INFO:__main__:Processing frame 231
+INFO:__main__:231 : deer
+INFO:__main__:Processed frame 231 in 3.1779603958129883s
+INFO:__main__:Processing frame 241
+INFO:__main__:241 : pig
+INFO:__main__:Processed frame 241 in 3.413710117340088s
+INFO:__main__:Processing frame 251
+INFO:__main__:251 : deer
+INFO:__main__:Processed frame 251 in 3.218125343322754s
+INFO:__main__:Processing frame 261
+INFO:__main__:261 : deer
+INFO:__main__:Processed frame 261 in 3.1134917736053467s
+INFO:__main__:Processing frame 271
+INFO:__main__:271 : cattle
+INFO:__main__:Processed frame 271 in 3.131781816482544s
+INFO:__main__:Processing frame 281
+INFO:__main__:281 : deer
+INFO:__main__:Processed frame 281 in 3.124345064163208s
+INFO:__main__:Processing frame 291
+INFO:__main__:291 : animal
+INFO:__main__:Processed frame 291 in 3.2230618000030518s
+INFO:__main__:Processing frame 301
+INFO:__main__:301 : animal
+INFO:__main__:Processed frame 301 in 3.2367312908172607s
+INFO:__main__:Processing frame 311
+INFO:__main__:311 : deer
+INFO:__main__:Processed frame 311 in 3.297805070877075s
+INFO:__main__:Processing frame 321
+INFO:__main__:321 : deer
+INFO:__main__:Processed frame 321 in 3.204301357269287s
+INFO:__main__:Processing frame 331
+INFO:__main__:331 : animal
+INFO:__main__:Processed frame 331 in 3.1666691303253174s
+INFO:__main__:Processing frame 341
+INFO:__main__:341 : animal
+INFO:__main__:Processed frame 341 in 3.215820074081421s
+INFO:__main__:Processing frame 351
+INFO:__main__:351 : animal
+INFO:__main__:Processed frame 351 in 3.2273552417755127s
+INFO:__main__:Processing frame 361
+INFO:__main__:361 : animal
+INFO:__main__:Processed frame 361 in 3.213222026824951s
+INFO:__main__:Processing frame 371
+INFO:__main__:371 : animal
+INFO:__main__:Processed frame 371 in 3.187323570251465s
+INFO:__main__:Processing frame 381
+INFO:__main__:381 : animal
+INFO:__main__:Processed frame 381 in 3.098924398422241s
+INFO:__main__:Processing frame 391
+INFO:__main__:391 : animal
+INFO:__main__:Processed frame 391 in 3.0682060718536377s
+INFO:__main__:Processing frame 401
+INFO:__main__:401 : animal
+INFO:__main__:Processed frame 401 in 3.0771656036376953s
+INFO:__main__:Processing frame 411
+INFO:__main__:411 : animal
+INFO:__main__:Processed frame 411 in 3.112645387649536s
+INFO:__main__:Processing frame 421
+INFO:__main__:421 : deer
+INFO:__main__:Processed frame 421 in 3.2535204887390137s
+INFO:__main__:Processing frame 431
+INFO:__main__:431 : deer
+INFO:__main__:Processed frame 431 in 3.2769124507904053s
+INFO:__main__:Processing frame 441
+INFO:__main__:441 : deer
+INFO:__main__:Processed frame 441 in 3.1189393997192383s
+INFO:__main__:Processing frame 451
+INFO:__main__:451 : deer
+INFO:__main__:Processed frame 451 in 3.1063320636749268s
+INFO:__main__:Processing frame 461
+INFO:__main__:461 : deer
+INFO:__main__:Processed frame 461 in 3.1890652179718018s
+INFO:__main__:Processing frame 471
+INFO:__main__:471 : kangaroo
+INFO:__main__:Processed frame 471 in 3.148134708404541s
+INFO:__main__:Processing frame 481
+INFO:__main__:481 : deer
+INFO:__main__:Processed frame 481 in 3.139218330383301s
+INFO:__main__:Processing frame 491
+INFO:__main__:491 : deer
+INFO:__main__:Processed frame 491 in 3.1275670528411865s
+INFO:__main__:Processing frame 501
+INFO:__main__:501 : deer
+INFO:__main__:Processed frame 501 in 3.1660349369049072s
+INFO:__main__:Processing frame 511
+INFO:__main__:511 : pig
+INFO:__main__:Processed frame 511 in 3.3032684326171875s
+INFO:__main__:Processing frame 521
+INFO:__main__:521 : deer
+INFO:__main__:Processed frame 521 in 3.2773993015289307s
+INFO:__main__:Processing frame 531
+INFO:__main__:531 : deer
+INFO:__main__:Processed frame 531 in 3.2233059406280518s
+INFO:__main__:Processing frame 541
+INFO:__main__:541 : pig
+INFO:__main__:Processed frame 541 in 3.3053741455078125s
+INFO:__main__:Processing frame 551
+INFO:__main__:551 : pig
+INFO:__main__:Processed frame 551 in 3.1697311401367188s
+INFO:__main__:Processing frame 561
+INFO:__main__:561 : pig
+INFO:__main__:Processed frame 561 in 3.1607882976531982s
+INFO:__main__:Processing frame 571
+INFO:__main__:571 : animal
+INFO:__main__:Processed frame 571 in 3.159712553024292s
+INFO:__main__:Processing frame 581
+INFO:__main__:581 : flower
+INFO:__main__:Processed frame 581 in 3.3107447624206543s
+INFO:__main__:Processing frame 591
+INFO:__main__:591 : houseplant
+INFO:__main__:Processed frame 591 in 3.1760270595550537s
+INFO:__main__:Processing frame 601
+INFO:__main__:601 : houseplant
+INFO:__main__:Processed frame 601 in 3.2225747108459473s
+INFO:__main__:Processing frame 611
+INFO:__main__:611 : houseplant
+INFO:__main__:Processed frame 611 in 3.085536003112793s
+INFO:__main__:Processing frame 621
+INFO:__main__:621 : houseplant
+INFO:__main__:Processed frame 621 in 3.275169610977173s
+INFO:__main__:Processing frame 631
+INFO:__main__:631 : house
+INFO:__main__:Processed frame 631 in 3.18304705619812s
+INFO:__main__:Processing frame 641
+INFO:__main__:641 : house
+INFO:__main__:Processed frame 641 in 3.181389331817627s
+INFO:__main__:Processing frame 651
+INFO:__main__:651 : houseplant
+INFO:__main__:Processed frame 651 in 3.1923375129699707s
+INFO:__main__:Processing frame 661
+INFO:__main__:661 : house
+INFO:__main__:Processed frame 661 in 3.1607580184936523s
+INFO:__main__:Processing frame 671
+INFO:__main__:671 : houseplant
+INFO:__main__:Processed frame 671 in 3.3200931549072266s
+INFO:__main__:Processing frame 681
+INFO:__main__:681 : houseplant
+INFO:__main__:Processed frame 681 in 3.302938222885132s
+INFO:__main__:Processing frame 691
+INFO:__main__:691 : house
+INFO:__main__:Processed frame 691 in 3.0838236808776855s
+INFO:__main__:Processing frame 701
+INFO:__main__:701 : houseplant
+INFO:__main__:Processed frame 701 in 3.1466565132141113s
+INFO:__main__:Processing frame 711
+INFO:__main__:711 : house
+INFO:__main__:Processed frame 711 in 3.185443162918091s
+INFO:__main__:Processing frame 721
+INFO:__main__:721 : houseplant
+INFO:__main__:Processed frame 721 in 3.1610682010650635s
+INFO:__main__:Processing frame 731
+INFO:__main__:731 : houseplant
+INFO:__main__:Processed frame 731 in 3.1115572452545166s
+INFO:__main__:Processing frame 741
+INFO:__main__:741 : houseplant
+INFO:__main__:Processed frame 741 in 3.2873008251190186s
+INFO:__main__:Processing frame 751
+INFO:__main__:751 : house
+INFO:__main__:Processed frame 751 in 3.138813018798828s
+INFO:__main__:Processing frame 761
+INFO:__main__:761 : houseplant
+INFO:__main__:Processed frame 761 in 3.14816951751709s
+INFO:__main__:Processing frame 771
+INFO:__main__:771 : houseplant
+INFO:__main__:Processed frame 771 in 3.1290457248687744s
+INFO:__main__:Processing frame 781
+INFO:__main__:781 : houseplant
+INFO:__main__:Processed frame 781 in 3.13200306892395s
+INFO:__main__:Processing frame 791
+INFO:__main__:791 : house
+INFO:__main__:Processed frame 791 in 3.1607065200805664s
+INFO:__main__:Processing frame 801
+INFO:__main__:801 : house
+INFO:__main__:Processed frame 801 in 3.162329912185669s
+INFO:__main__:Processing frame 811
+INFO:__main__:811 : houseplant
+INFO:__main__:Processed frame 811 in 3.1407155990600586s
+INFO:__main__:Processing frame 821
+INFO:__main__:821 : houseplant
+INFO:__main__:Processed frame 821 in 3.1523730754852295s
+INFO:__main__:Processing frame 831
+INFO:__main__:831 : houseplant
+INFO:__main__:Processed frame 831 in 3.1316468715667725s
+INFO:__main__:Processing frame 841
+INFO:__main__:841 : houseplant
+INFO:__main__:Processed frame 841 in 3.35530424118042s
+INFO:__main__:Processing frame 851
+INFO:__main__:851 : houseplant
+INFO:__main__:Processed frame 851 in 3.2958579063415527s
+INFO:__main__:Processing frame 861
+INFO:__main__:861 : houseplant
+INFO:__main__:Processed frame 861 in 3.179126501083374s
+INFO:__main__:Processing frame 871
+INFO:__main__:871 : house
+INFO:__main__:Processed frame 871 in 3.185912609100342s
+INFO:__main__:Processing frame 881
+INFO:__main__:881 : houseplant
+INFO:__main__:Processed frame 881 in 3.061025857925415s
+INFO:__main__:Processing frame 891
+INFO:__main__:891 : houseplant
+INFO:__main__:Processed frame 891 in 3.00923752784729s
+INFO:__main__:Processing frame 901
+INFO:__main__:901 : houseplant
+INFO:__main__:Processed frame 901 in 3.156083583831787s
+
+real    5m28.080s
+user    75m26.831s
+sys     4m53.180s
+
+INFO:__main__:Loaded microsoft/Florence-2-large-ft
+INFO:__main__:Processing frame 1
+INFO:__main__:1 : animal
+INFO:__main__:Processed frame 1 in 10.637328386306763s
+INFO:__main__:Processing frame 11
+INFO:__main__:11 : animal
+INFO:__main__:Processed frame 11 in 10.936254739761353s
+INFO:__main__:Processing frame 21
+INFO:__main__:21 : animal
+INFO:__main__:Processed frame 21 in 9.556510925292969s
+INFO:__main__:Processing frame 31
+INFO:__main__:31 : animal
+INFO:__main__:Processed frame 31 in 9.760347366333008s
+INFO:__main__:Processing frame 41
+INFO:__main__:41 : deer
+INFO:__main__:Processed frame 41 in 10.239283084869385s
+INFO:__main__:Processing frame 51
+INFO:__main__:51 : deer
+INFO:__main__:Processed frame 51 in 10.340070009231567s
+INFO:__main__:Processing frame 61
+INFO:__main__:61 : deer
+INFO:__main__:Processed frame 61 in 9.878312587738037s
+INFO:__main__:Processing frame 71
+INFO:__main__:71 : deer
+INFO:__main__:Processed frame 71 in 10.194787502288818s
+INFO:__main__:Processing frame 81
+INFO:__main__:81 : deer
+INFO:__main__:Processed frame 81 in 10.386769533157349s
+INFO:__main__:Processing frame 91
+INFO:__main__:91 : animal
+INFO:__main__:Processed frame 91 in 9.944922685623169s
+INFO:__main__:Processing frame 101
+INFO:__main__:101 : animal
+INFO:__main__:Processed frame 101 in 10.471013069152832s
+INFO:__main__:Processing frame 111
+INFO:__main__:111 : animal
+INFO:__main__:Processed frame 111 in 10.21665072441101s
+INFO:__main__:Processing frame 121
+INFO:__main__:121 : deer
+INFO:__main__:Processed frame 121 in 9.393383502960205s
+INFO:__main__:Processing frame 131
+INFO:__main__:131 : deer
+INFO:__main__:Processed frame 131 in 9.096124410629272s
+INFO:__main__:Processing frame 141
+INFO:__main__:141 : deer
+INFO:__main__:Processed frame 141 in 10.084969282150269s
+INFO:__main__:Processing frame 151
+INFO:__main__:151 : animal
+INFO:__main__:Processed frame 151 in 10.056680679321289s
+INFO:__main__:Processing frame 161
+INFO:__main__:161 : deer
+INFO:__main__:Processed frame 161 in 10.241064548492432s
+INFO:__main__:Processing frame 171
+INFO:__main__:171 : animal
+INFO:__main__:Processed frame 171 in 10.24997091293335s
+INFO:__main__:Processing frame 181
+INFO:__main__:181 : animal
+INFO:__main__:Processed frame 181 in 9.155004262924194s
+INFO:__main__:Processing frame 191
+INFO:__main__:191 : animal
+INFO:__main__:Processed frame 191 in 9.0167977809906s
+INFO:__main__:Processing frame 201
+INFO:__main__:201 : animal
+INFO:__main__:Processed frame 201 in 9.365382671356201s
+INFO:__main__:Processing frame 211
+INFO:__main__:211 : animal
+INFO:__main__:Processed frame 211 in 9.401335000991821s
+INFO:__main__:Processing frame 221
+INFO:__main__:221 : animal
+INFO:__main__:Processed frame 221 in 10.179062843322754s
+INFO:__main__:Processing frame 231
+INFO:__main__:231 : deer
+INFO:__main__:Processed frame 231 in 10.051639080047607s
+INFO:__main__:Processing frame 241
+INFO:__main__:241 : animal
+INFO:__main__:Processed frame 241 in 9.543461799621582s
+INFO:__main__:Processing frame 251
+INFO:__main__:251 : deer
+INFO:__main__:Processed frame 251 in 10.194539070129395s
+INFO:__main__:Processing frame 261
+INFO:__main__:261 : deer
+INFO:__main__:Processed frame 261 in 9.972888469696045s
+INFO:__main__:Processing frame 271
+INFO:__main__:271 : animal
+INFO:__main__:Processed frame 271 in 9.408460140228271s
+INFO:__main__:Processing frame 281
+INFO:__main__:281 : deer
+INFO:__main__:Processed frame 281 in 8.729736804962158s
+INFO:__main__:Processing frame 291
+INFO:__main__:291 : animal
+INFO:__main__:Processed frame 291 in 9.102265119552612s
+INFO:__main__:Processing frame 301
+INFO:__main__:301 : animal
+INFO:__main__:Processed frame 301 in 10.37744665145874s
+INFO:__main__:Processing frame 311
+INFO:__main__:311 : animal
+INFO:__main__:Processed frame 311 in 9.585113525390625s
+INFO:__main__:Processing frame 321
+INFO:__main__:321 : animal
+INFO:__main__:Processed frame 321 in 9.529253482818604s
+INFO:__main__:Processing frame 331
+INFO:__main__:331 : animal
+INFO:__main__:Processed frame 331 in 9.438838005065918s
+INFO:__main__:Processing frame 341
+INFO:__main__:341 : animal
+INFO:__main__:Processed frame 341 in 10.020126104354858s
+INFO:__main__:Processing frame 351
+INFO:__main__:351 : animal
+INFO:__main__:Processed frame 351 in 9.772663831710815s
+INFO:__main__:Processing frame 361
+INFO:__main__:361 : animal
+INFO:__main__:Processed frame 361 in 9.902527570724487s
+INFO:__main__:Processing frame 371
+INFO:__main__:371 : animal
+INFO:__main__:Processed frame 371 in 9.986930131912231s
+INFO:__main__:Processing frame 381
+INFO:__main__:381 : animal
+INFO:__main__:Processed frame 381 in 9.491582870483398s
+INFO:__main__:Processing frame 391
+INFO:__main__:391 : animal
+INFO:__main__:Processed frame 391 in 9.476157665252686s
+INFO:__main__:Processing frame 401
+INFO:__main__:401 : animal
+INFO:__main__:Processed frame 401 in 9.768942594528198s
+INFO:__main__:Processing frame 411
+INFO:__main__:411 : pig
+INFO:__main__:Processed frame 411 in 9.526266813278198s
+INFO:__main__:Processing frame 421
+INFO:__main__:421 : animal
+INFO:__main__:Processed frame 421 in 10.192935466766357s
+INFO:__main__:Processing frame 431
+INFO:__main__:431 : deer
+INFO:__main__:Processed frame 431 in 10.103434562683105s
+INFO:__main__:Processing frame 441
+INFO:__main__:441 : deer
+INFO:__main__:Processed frame 441 in 9.5852952003479s
+INFO:__main__:Processing frame 451
+INFO:__main__:451 : deer
+INFO:__main__:Processed frame 451 in 10.259360074996948s
+INFO:__main__:Processing frame 461
+INFO:__main__:461 : deer
+INFO:__main__:Processed frame 461 in 10.06057858467102s
+INFO:__main__:Processing frame 471
+INFO:__main__:471 : deer
+INFO:__main__:Processed frame 471 in 9.516756057739258s
+INFO:__main__:Processing frame 481
+INFO:__main__:481 : pig
+INFO:__main__:Processed frame 481 in 10.4941885471344s
+INFO:__main__:Processing frame 491
+INFO:__main__:491 : deer
+INFO:__main__:Processed frame 491 in 10.109411716461182s
+INFO:__main__:Processing frame 501
+INFO:__main__:501 : deer
+INFO:__main__:Processed frame 501 in 9.300922155380249s
+INFO:__main__:Processing frame 511
+INFO:__main__:511 : animal
+INFO:__main__:Processed frame 511 in 8.82961630821228s
+INFO:__main__:Processing frame 521
+INFO:__main__:521 : deer
+INFO:__main__:Processed frame 521 in 9.98086166381836s
+INFO:__main__:Processing frame 531
+INFO:__main__:531 : deer
+INFO:__main__:Processed frame 531 in 9.523148775100708s
+INFO:__main__:Processing frame 541
+INFO:__main__:541 : animal
+INFO:__main__:Processed frame 541 in 9.117006778717041s
+INFO:__main__:Processing frame 551
+INFO:__main__:551 : pig
+INFO:__main__:Processed frame 551 in 10.152681827545166s
+INFO:__main__:Processing frame 561
+INFO:__main__:561 : animal
+INFO:__main__:Processed frame 561 in 9.900379657745361s
+INFO:__main__:Processing frame 571
+INFO:__main__:571 : animal
+INFO:__main__:Processed frame 571 in 9.889065504074097s
+INFO:__main__:Processing frame 581
+INFO:__main__:581 : sheep
+INFO:__main__:Processed frame 581 in 9.835827350616455s
+INFO:__main__:Processing frame 591
+INFO:__main__:591 : human face
+INFO:__main__:Processed frame 591 in 10.113645792007446s
+INFO:__main__:Processing frame 601
+INFO:__main__:601 : human face
+INFO:__main__:Processed frame 601 in 10.489484310150146s
+INFO:__main__:Processing frame 611
+INFO:__main__:611 : human face
+INFO:__main__:Processed frame 611 in 10.095755815505981s
+INFO:__main__:Processing frame 621
+INFO:__main__:621 : human face
+INFO:__main__:Processed frame 621 in 9.474176406860352s
+INFO:__main__:Processing frame 631
+INFO:__main__:631 : human face
+INFO:__main__:Processed frame 631 in 10.141834259033203s
+INFO:__main__:Processing frame 641
+INFO:__main__:641 : human face
+INFO:__main__:Processed frame 641 in 10.247849702835083s
+INFO:__main__:Processing frame 651
+INFO:__main__:651 : human face
+INFO:__main__:Processed frame 651 in 10.064995050430298s
+INFO:__main__:Processing frame 661
+INFO:__main__:661 : human face
+INFO:__main__:Processed frame 661 in 10.159615755081177s
+INFO:__main__:Processing frame 671
+INFO:__main__:671 : human face
+INFO:__main__:Processed frame 671 in 10.171594858169556s
+INFO:__main__:Processing frame 681
+INFO:__main__:681 : human face
+INFO:__main__:Processed frame 681 in 10.254231929779053s
+INFO:__main__:Processing frame 691
+INFO:__main__:691 : human face
+INFO:__main__:Processed frame 691 in 10.207246780395508s
+INFO:__main__:Processing frame 701
+INFO:__main__:701 : human face
+INFO:__main__:Processed frame 701 in 10.06001353263855s
+INFO:__main__:Processing frame 711
+INFO:__main__:711 : human face
+INFO:__main__:Processed frame 711 in 10.14025068283081s
+INFO:__main__:Processing frame 721
+INFO:__main__:721 : human face
+INFO:__main__:Processed frame 721 in 10.490075826644897s
+INFO:__main__:Processing frame 731
+INFO:__main__:731 : human face
+INFO:__main__:Processed frame 731 in 10.362508773803711s
+INFO:__main__:Processing frame 741
+INFO:__main__:741 : human face
+INFO:__main__:Processed frame 741 in 10.04695200920105s
+INFO:__main__:Processing frame 751
+INFO:__main__:751 : human face
+INFO:__main__:Processed frame 751 in 10.053911924362183s
+INFO:__main__:Processing frame 761
+INFO:__main__:761 : human face
+INFO:__main__:Processed frame 761 in 10.150970220565796s
+INFO:__main__:Processing frame 771
+INFO:__main__:771 : human face
+INFO:__main__:Processed frame 771 in 9.763737440109253s
+INFO:__main__:Processing frame 781
+INFO:__main__:781 : human face
+INFO:__main__:Processed frame 781 in 10.050862789154053s
+INFO:__main__:Processing frame 791
+INFO:__main__:791 : human face
+INFO:__main__:Processed frame 791 in 9.693775415420532s
+INFO:__main__:Processing frame 801
+INFO:__main__:801 : human face
+INFO:__main__:Processed frame 801 in 9.843887090682983s
+INFO:__main__:Processing frame 811
+INFO:__main__:811 : human face
+INFO:__main__:Processed frame 811 in 10.595969676971436s
+INFO:__main__:Processing frame 821
+INFO:__main__:821 : human face
+INFO:__main__:Processed frame 821 in 10.177629709243774s
+INFO:__main__:Processing frame 831
+INFO:__main__:831 : human face
+INFO:__main__:Processed frame 831 in 9.480146408081055s
+INFO:__main__:Processing frame 841
+INFO:__main__:841 : human face
+INFO:__main__:Processed frame 841 in 10.193472623825073s
+INFO:__main__:Processing frame 851
+INFO:__main__:851 : human face
+INFO:__main__:Processed frame 851 in 9.972473382949829s
+INFO:__main__:Processing frame 861
+INFO:__main__:861 : human face
+INFO:__main__:Processed frame 861 in 10.034611463546753s
+INFO:__main__:Processing frame 871
+INFO:__main__:871 : human face
+INFO:__main__:Processed frame 871 in 10.104565143585205s
+INFO:__main__:Processing frame 881
+INFO:__main__:881 : human face
+INFO:__main__:Processed frame 881 in 10.022204875946045s
+INFO:__main__:Processing frame 891
+INFO:__main__:891 : human face
+INFO:__main__:Processed frame 891 in 10.01298475265503s
+INFO:__main__:Processing frame 901
+INFO:__main__:901 : human face
+INFO:__main__:Processed frame 901 in 9.969702005386353s
+
+real    15m44.377s
+user    215m45.832s
+sys     21m31.189s
