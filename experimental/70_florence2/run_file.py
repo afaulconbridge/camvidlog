@@ -1,6 +1,7 @@
 import logging
 import time
 from collections.abc import Generator, Iterable
+from math import ceil, floor
 from pathlib import Path
 
 import cv2
@@ -25,12 +26,12 @@ def generate_frames_cv2(filename: str | Path) -> Generator[tuple[int, np.ndarray
 
 
 class Florence2:
-    def __init__(self, model_id="microsoft/Florence-2-large-ft"):
+    def __init__(self, model_id="microsoft/Florence-2-large-ft", device: str = "cpu"):
         # "microsoft/Florence-2-large-ft"
         # "microsoft/Florence-2-base-ft"
         logger.info(f"Loading {model_id}")
-        self.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device
+        self.torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
 
         self.model = (
             AutoModelForCausalLM.from_pretrained(model_id, trust_remote_code=True)
@@ -63,9 +64,30 @@ class Florence2:
             image_size=(image.width, image.height),
         )
 
+    def process_od(self, image: Image) -> Generator[tuple[str, tuple[int, int, int, int]], None, None]:
+        results = self.process(
+            image=image,
+            task_prompt="<OD>",
+        )["<OD>"]
+        for label, bbox in zip(results["labels"], results["bboxes"], strict=False):
+            bbox_pixel = (floor(bbox[0]), floor(bbox[1]), ceil(bbox[2]), ceil(bbox[3]))
+            yield label, bbox_pixel
 
-def main(filenames: Iterable[str | Path]):
-    florence = Florence2()
+    def process_open_vocab(
+        self, image: Image, text_input: str
+    ) -> Generator[tuple[str, tuple[int, int, int, int]], None, None]:
+        results = self.process(
+            image=image,
+            task_prompt="<OPEN_VOCABULARY_DETECTION>",
+            text_input=text_input,
+        )["<OPEN_VOCABULARY_DETECTION>"]
+        for label, bbox in zip(results["bboxes_labels"], results["bboxes"], strict=False):
+            bbox_pixel = (floor(bbox[0]), floor(bbox[1]), ceil(bbox[2]), ceil(bbox[3]))
+            yield label, bbox_pixel
+
+
+def main(filenames: Iterable[str | Path], device: str = "cpu"):
+    florence = Florence2(device=device)
 
     for filename in filenames:
         filename = Path(filename)
@@ -76,9 +98,10 @@ def main(filenames: Iterable[str | Path]):
             startime = time.time()
             logger.info(f"Processing frame {frame_no}")
             image = Image.fromarray(frame)
-            result = florence.process(image, "<OD>")
-            for label in result["<OD>"]["labels"]:
-                logger.info(f"{frame_no} : {label}")
+
+            for label, bbox in florence.process_od(image):
+                logger.info(f"{frame_no} : {label} : {bbox}")
+
             endtime = time.time()
             logger.info(f"Processed frame {frame_no} in {endtime - startime}s")
 
@@ -87,10 +110,10 @@ app = typer.Typer()
 
 
 @app.command()
-def setup(filenames: list[str]) -> None:
+def setup(filenames: list[str], device: str = "cpu") -> None:
     logging.basicConfig(level=logging.INFO)
 
-    main(filenames)
+    main(filenames, device)
 
 
 if __name__ == "__main__":
