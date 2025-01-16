@@ -6,5 +6,5 @@ pros
  - unprompted
  - HuggingFace - easy to use
 cons
- - slow
+ - slowish (0.2seconds per frame on 4070 Ti, 10s on server CPU)
  - no quality score so hallucinates on empty frames
